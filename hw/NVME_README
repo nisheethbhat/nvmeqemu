@@ -333,3 +333,12 @@ ls usr/share/grub/x86_64-redhat/
 	ufs2_stage1_5
 	vstafs_stage1_5
 	xfs_stage1_5
+
+
+8. Performance notes
+
+Consider adding the following switches when invoking configure:
+--enable-io-thread --enable-linux-aio
+
+Consider adding the following switches when invoking qemu:
+--enable-kvm -smp 2
