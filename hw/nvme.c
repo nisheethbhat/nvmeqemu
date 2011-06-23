@@ -97,57 +97,35 @@ static uint16_t process_doorbell(NVMEState *n, target_phys_addr_t addr,
 
 	/*Check if it is CQ or SQ doorbell */
 
-	pthread_mutex_lock(&n->nvme_doorbell);
-//	printf("kw q: mutex_lock process_doorbell\n");
-	tmp = (addr - NVME_SQ0TDBL) / sizeof(uint32_t);
+      tmp = (addr - NVME_SQ0TDBL) / sizeof(uint32_t);
 	if (tmp % 2) {
 	/* CQ */
 		tmp = (addr - NVME_CQ0HDBL) / 8;
 		if (tmp > NVME_MAX_QID) {
 			printf("Wrong CQ ID: %d\n", tmp);
-			pthread_mutex_unlock(&n->nvme_doorbell);
-			return 1;
+
+                        return 1;
 		}
 
 		n->cq[tmp].head = val & 0xffff;
-//		printf("kw q: Doorbell CQ: %d, val %d,  H %d, T %d\n",
-//			 tmp, val, n->cq[tmp].head, n->cq[tmp].tail);
-
-//		if (!tmp) {
-//			printf("%s(): Adm CQ change %hu->%hu\n", __func__,
-//				 n->cq[ACQ_ID].head, (uint16_t)val & 0xffff);
-//		}
 	} else {
 	/* SQ */
 		tmp = (addr - NVME_SQ0TDBL) / 8;
 		if (tmp > NVME_MAX_QID) {
 			printf("Wrong SQ ID: %d\n", tmp);
-			pthread_mutex_unlock(&n->nvme_doorbell);
-			return 1;
+
+                        return 1;
 		}
 
-//		printf("kw q: Doorbell SQ ID: %d val %d\n", tmp, val);
 		n->sq[tmp].tail = val & 0xffff;
 
-//		if (!tmp) {
-//			printf("%s(): Adm SQ Tail updated %hu->%hu\n", __func__,
-//				 n->sq[ASQ_ID].tail, (uint16_t)val & 0xffff);
-//		}
-
-//	printf("-------------------------------------------------------------------\n");
-//		printf("process IO request\n");
-//		printf("SQ id: %d val %d,  H %d, T %d\n", tmp, val,
-//						n->sq[tmp].head, n->sq[tmp].tail);
 		do {
-			process_sq_no_thread(n, tmp);
+                        process_sq(n, tmp);
 		} while (n->sq[tmp].head != n->sq[tmp].tail);
-//	printf("-------------------------------------------------------------------\n");
 
 	}
 
-	pthread_mutex_unlock(&n->nvme_doorbell);
-//	printf("kw q: mutex_unlock process_doorbell\n");
-	return 0;
+        return 0;
 }
 
 /* Write 1 Byte at addr/register */
@@ -355,11 +333,8 @@ static int pci_nvme_init(PCIDevice *pci_dev)
 	uint8_t *pci_conf = NULL;
 	uint32_t ret;
 
-	//printf("%s(): called!\n",__func__);
+        pci_conf = n->dev.config;
 
-	pci_conf = n->dev.config;
-
-	//pthread_mutex_init(&n->nvme_state_mutex);
 
 	pci_config_set_vendor_id(pci_conf, PCI_VENDOR_ID_INTEL);
 	/* Device id is fake  */
@@ -413,18 +388,8 @@ static int pci_nvme_init(PCIDevice *pci_dev)
 		memset(&(n->cq[ret]), 0, sizeof(NVMEIOCQueue));
 	}
 
-	ret = pthread_mutex_init(&n->nvme_doorbell, NULL);
-	if (ret)
-		return ret;
-
-	n->io_thread_state = TH_NOT_STARTED;
-/*
-	ret = nvme_init_io_thread(n);
-	if (ret)
-		return ret;
-*/
-	/* TODO handle error open_storage_file */
-//	return nvme_open_storage_file(n);
+        n->fd = -1;
+        n->mapping_addr = NULL;
 	return 0;
 }
 
@@ -432,20 +397,7 @@ static int pci_nvme_uninit(PCIDevice *pci_dev)
 {
 	NVMEState *n = DO_UPCAST(NVMEState, dev, pci_dev);
 
-	if (n->io_thread_state == TH_NOT_STARTED)
-		return 0;
-
-	if (n->io_thread_state == TH_STARTED)
-		n->io_thread_state = TH_STOP;
-
-	while(n->io_thread_state != TH_EXIT) {
-		sleep(1);
-	}
-
-	pthread_mutex_destroy(&n->nvme_doorbell);
-
-	if (n->file)
-		fclose(n->file);
+        nvme_close_storage_file(n);
 
 	return 0;
 }

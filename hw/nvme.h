@@ -20,8 +20,6 @@
 #ifndef NVME_H_
 #define NVME_H_
 
-#include <pthread.h>
-#include <unistd.h>
 #include "hw.h"
 #include "pci.h"
 #include "qemu-timer.h"
@@ -48,7 +46,8 @@
 
 #define NVME_BUF_SIZE	4096
 #define NVME_BLOCK_SIZE		512
-#define NVME_TOTAL_BLOCKS	((200*1024*1024) / NVME_BLOCK_SIZE)
+#define NVME_STORAGE_FILE_SIZE	(1024 * 1024 * 1024)
+#define NVME_TOTAL_BLOCKS	(NVME_STORAGE_FILE_SIZE / NVME_BLOCK_SIZE)
 #define FAIL 0x1
 #define NVME_ABORT_COMMAND_LIMIT 10
 #define NVME_EMPTY 0xffffffff
@@ -263,13 +262,9 @@ typedef struct NVMEState {
 	NVMEIOCQueue cq[NVME_MAX_QID];
 	NVMEIOSQueue sq[NVME_MAX_QID];
 
-	pthread_mutex_t nvme_state_mutex; /* Mutex protecting nvme state. */
-
-	pthread_mutex_t nvme_doorbell;
-	pthread_t nvme_io_thread;
-	uint8_t io_thread_state;
-
-	FILE *file;
+        int    fd;
+        uint8_t* mapping_addr;
+        size_t mapping_size;
 } NVMEState;
 
 /*
@@ -730,6 +725,6 @@ int nvme_close_storage_file(NVMEState *n);
 
 void nvme_dma_mem_read(target_phys_addr_t addr, uint8_t *buf, int len);
 void nvme_dma_mem_write(target_phys_addr_t addr, uint8_t *buf, int len);
-void process_sq_no_thread(NVMEState *n, uint16_t sq_id);
+void process_sq(NVMEState *n, uint16_t sq_id);
 
 #endif /* NVME_H_ */

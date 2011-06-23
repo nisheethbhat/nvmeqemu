@@ -528,17 +528,8 @@ static uint32_t adm_cmd_id_ns(NVMEState *n, NVMECmd *cmd)
 	printf("%s(): copying %lu data into addr %lu\n",
 					 __func__, sizeof(*ns), cmd->prp1);
 
-	/* XXX For test only: 250 M file but only 200 M reported.
-	 after debuging change to:
-		(540  Meg drive would be LBA 1,065,456)
-	use :
-		dd if=/dev/zero of=/250.img bs=1M count=250
-		or
-		dd if=/dev/zero of=/540.img bs=512 count=1065456
-	*/
 
 {
-//		   2097152
 	ns->nsze = NVME_TOTAL_BLOCKS;
 	ns->ncap = NVME_TOTAL_BLOCKS;
 	ns->nuse = NVME_TOTAL_BLOCKS;
