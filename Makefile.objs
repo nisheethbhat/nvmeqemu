@@ -295,6 +295,10 @@ hw-obj-$(CONFIG_SOUND) += $(sound-obj-y)
 hw-obj-$(CONFIG_REALLY_VIRTFS) += $(addprefix 9pfs/, $(9pfs-nested-y))
 
 
+
+#NVMe
+hw-obj-$(CONFIG_NVME) += nvme.o nvme_adm.o nvme_storage.o nvme_io.o
+
 ######################################################################
 # libdis
 # NOTE: the disassembler code is only needed for debugging
