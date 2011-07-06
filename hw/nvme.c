@@ -18,11 +18,17 @@
  */
 
 #include "nvme.h"
+#include "nvme_debug.h"
 
 static const VMStateDescription vmstate_nvme = {
 	.name = "nvme",
 	.version_id = 1,
 };
+
+#define NVME_THREADED
+
+/* Mutex for exclusive access to NVMEState	*/
+pthread_mutex_t nvme_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static void clear_nvme_device(NVMEState *n);
 
@@ -89,11 +95,12 @@ static void process_reg_writel(NVMEState *n, target_phys_addr_t addr,
 		/* Doorbell write */
 	}
 }
-
+#ifndef NVME_THREADED
 static uint16_t process_doorbell(NVMEState *n, target_phys_addr_t addr,
 								 uint32_t val)
 {
 	uint32_t tmp = 0;
+
 
 	/*Check if it is CQ or SQ doorbell */
 
@@ -117,10 +124,11 @@ static uint16_t process_doorbell(NVMEState *n, target_phys_addr_t addr,
                         return 1;
 		}
 
+
 		n->sq[tmp].tail = val & 0xffff;
 
 		do {
-                        process_sq(n, tmp);
+				process_sq(n, tmp);
 		} while (n->sq[tmp].head != n->sq[tmp].tail);
 
 	}
@@ -128,6 +136,69 @@ static uint16_t process_doorbell(NVMEState *n, target_phys_addr_t addr,
         return 0;
 }
 
+#else
+/*********************************************************************
+	Function 	:	process_doorbell_thread
+	Description	:	Thread for processing Doorbell and SQ commands
+	Return Type :	void*
+	Arguments	: 	NVMEThread*
+*********************************************************************/
+void * process_doorbell_thread(NVMEThread* nt)
+{
+	NVMEState *n ;
+	target_phys_addr_t addr;
+	uint32_t val;
+	uint32_t tmp = 0;
+	//char msg[50];
+	LOG_NORM("Came Inside Threaded Arch")
+	pthread_detach(pthread_self());
+
+	n = nt->n;
+	addr = nt->addr;
+	val = nt->val;
+
+	/*Check if it is CQ or SQ doorbell */
+
+    tmp = (addr - NVME_SQ0TDBL) / sizeof(uint32_t);
+
+    pthread_mutex_lock(&nvme_mutex);
+    if (tmp % 2) {
+	/* CQ */
+		tmp = (addr - NVME_CQ0HDBL) / 8;
+		if (tmp > NVME_MAX_QID) {
+			printf("Wrong CQ ID: %d\n", tmp);
+			//sprintf (msg, "Wrong CQ ID: %d\n",tmp);
+			//LOG_ERR(msg);
+			pthread_mutex_unlock(&nvme_mutex);
+			return (NULL);
+		}
+
+		n->cq[tmp].head = val & 0xffff;
+	} else {
+	/* SQ */
+		tmp = (addr - NVME_SQ0TDBL) / 8;
+		if (tmp > NVME_MAX_QID) {
+			printf("Wrong SQ ID: %d\n", tmp);
+			//sprintf (msg, "Wrong SQ ID: %d\n",tmp);
+			//LOG_ERR(msg);
+			pthread_mutex_unlock(&nvme_mutex);
+			return (NULL);
+		}
+
+
+		n->sq[tmp].tail = val & 0xffff;
+
+		do {
+						process_sq(n, tmp);
+		} while (n->sq[tmp].head != n->sq[tmp].tail);
+	}
+
+	pthread_mutex_unlock(&nvme_mutex);
+	free(nt);
+	LOG_NORM("Finished Threaded Arch")
+	return(NULL);
+}
+#endif
 /* Write 1 Byte at addr/register */
 static void nvme_mmio_writeb(void *opaque, target_phys_addr_t addr,
 								 uint32_t val)
@@ -146,6 +217,7 @@ static void nvme_mmio_writew(void *opaque, target_phys_addr_t addr,
 								 uint32_t val)
 {
 	NVMEState *n = opaque;
+	NVMEThread * nt = (NVMEThread *) malloc(1 * sizeof (NVMEThread));
 	printf("%s(): addr = 0x%08x, val = 0x%08x\n", __func__,
 		(unsigned)addr, val);
 
@@ -156,8 +228,17 @@ static void nvme_mmio_writew(void *opaque, target_phys_addr_t addr,
 	}
 
 	/* Doorbell area is  between NVME_SQ0TDBL and NVME_CQMAXHDBL */
-	if (addr >= NVME_SQ0TDBL && addr <= NVME_CQMAXHDBL)
-		process_doorbell(n, addr, val);
+	if (addr >= NVME_SQ0TDBL && addr <= NVME_CQMAXHDBL){
+		#ifdef NVME_THREADED
+			nt->n = n;
+			nt->addr = addr;
+			nt->val = val;
+			process_doorbell_thread(nt);
+		#else
+			process_doorbell(n, addr, val);
+		#endif
+	}
+	return ;
 }
 
 /* Write 4 Bytes at addr/register */
@@ -165,6 +246,8 @@ static void nvme_mmio_writel(void *opaque, target_phys_addr_t addr,
 								 uint32_t val)
 {
 	NVMEState *n = opaque;
+	NVMEThread * nt = (NVMEThread *) malloc(1 * sizeof (NVMEThread));
+
 /*
 	printf("%s(): addr = 0x%08x, val = 0x%08x\n", __func__,
 		(unsigned)addr, val);
@@ -176,10 +259,19 @@ static void nvme_mmio_writel(void *opaque, target_phys_addr_t addr,
 	}
 
 	/* Doorbell area is  between NVME_SQ0TDBL and NVME_CQMAXHDBL */
-	if (addr >= NVME_SQ0TDBL && addr <= NVME_CQMAXHDBL)
-		process_doorbell(n, addr, val);
-}
+	if (addr >= NVME_SQ0TDBL && addr <= NVME_CQMAXHDBL){
+		#ifdef NVME_THREADED
+			nt->n = n;
+			nt->addr = addr;
+			nt->val = val;
+			process_doorbell_thread(nt);
+		#else
+			process_doorbell(n, addr, val);
+		#endif
 
+	}
+	return;
+}
 /* Read 1 Byte from addr/register */
 static uint32_t nvme_mmio_readb(void *opaque, target_phys_addr_t addr)
 {

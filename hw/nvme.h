@@ -26,6 +26,8 @@
 #include "loader.h"
 #include "sysemu.h"
 #include "msix.h"
+#include "pthread.h"
+
 
 /* Should be in pci class someday. */
 #define PCI_CLASS_STORAGE_EXPRESS 0x010802
@@ -51,6 +53,8 @@
 #define FAIL 0x1
 #define NVME_ABORT_COMMAND_LIMIT 10
 #define NVME_EMPTY 0xffffffff
+
+
 
 /* NVMe Controller Registers */
 enum {
@@ -262,9 +266,11 @@ typedef struct NVMEState {
 	NVMEIOCQueue cq[NVME_MAX_QID];
 	NVMEIOSQueue sq[NVME_MAX_QID];
 
-        int    fd;
-        uint8_t* mapping_addr;
-        size_t mapping_size;
+	int    fd;
+	uint8_t* mapping_addr;
+	size_t mapping_size;
+	/* Signaling Global flag between MMIO Register RW and Admin/IO Cmd threads */
+	uint8_t sync_flag;
 } NVMEState;
 
 /*
@@ -710,6 +716,15 @@ typedef struct NVMEIdentifyNamespace {
 	uint8_t vs[3712];	/* [384-4095] Vendor Specific */
 } NVMEIdentifyNamespace;
 
+
+/* Structure for threaded execution			*/
+typedef struct NVMEThread {
+	NVMEState *n ;
+	target_phys_addr_t addr;
+	uint32_t val;
+}NVMEThread;
+
+
 /* Initialize IO thread */
 int nvme_init_io_thread(NVMEState *n);
 
@@ -726,5 +741,7 @@ int nvme_close_storage_file(NVMEState *n);
 void nvme_dma_mem_read(target_phys_addr_t addr, uint8_t *buf, int len);
 void nvme_dma_mem_write(target_phys_addr_t addr, uint8_t *buf, int len);
 void process_sq(NVMEState *n, uint16_t sq_id);
+
+void * process_doorbell_thread(NVMEThread *n);
 
 #endif /* NVME_H_ */

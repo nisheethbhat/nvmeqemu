@@ -64,6 +64,7 @@ void process_sq(NVMEState *n, uint16_t sq_id)
 	uint32_t ret = NVME_SC_DATA_XFER_ERROR;
 	NVMEStatusField *sf = (NVMEStatusField*) &cqe.status;
 
+
 	cq_id = n->sq[sq_id].cq_id;
 	if (is_cq_full(n, cq_id))
 		return;
@@ -115,5 +116,9 @@ void process_sq(NVMEState *n, uint16_t sq_id)
 	} else {
 		printf("kw q: IRQ not enabled for CQ: %d;\n", cq_id);
 	}
+
+
 }
+
+
 
