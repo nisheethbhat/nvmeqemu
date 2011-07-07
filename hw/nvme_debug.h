@@ -1,12 +1,12 @@
-#define LEVEL           "qnvme"
-
-#define LOG_NORM(msg)   \
-    printf("%s: %s\n", LEVEL, msg);
-#define LOG_ERR(msg)    \
-    printf(stderr, "%s-ERR:__FILE__:__LINE__: %s\n", LEVEL, msg);
+#define APPNAME         "qnvme"
+#define LEVEL           APPNAME
+#define LOG_NORM(fmt, ...)    \
+    fprintf(stderr, "%s: " fmt "\n", LEVEL, ## __VA_ARGS__);
+#define LOG_ERR(fmt, ...)    \
+    fprintf(stderr, "%s-ERR:%s:%d: " fmt "\n", LEVEL, __FILE__, __LINE__, ## __VA_ARGS__);
 #ifdef DEBUG
-#define LOG_DBG(msg)    \
-    fprintf(stderr, "%s-DBG:__FILE__:__LINE__: %s\n", LEVEL, msg);
+#define LOG_DBG(fmt, ...)    \
+    fprintf(stderr, "%s-DBG:%s:%d: " fmt "\n", LEVEL, __FILE__, __LINE__, ## __VA_ARGS__);
 #else
-#define LOG_DBG(msg)    ;
+#define LOG_DBG(fmt, ...)    ;
 #endif

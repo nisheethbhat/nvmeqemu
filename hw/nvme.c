@@ -166,9 +166,7 @@ void * process_doorbell_thread(NVMEThread* nt)
 	/* CQ */
 		tmp = (addr - NVME_CQ0HDBL) / 8;
 		if (tmp > NVME_MAX_QID) {
-			printf("Wrong CQ ID: %d\n", tmp);
-			//sprintf (msg, "Wrong CQ ID: %d\n",tmp);
-			//LOG_ERR(msg);
+			LOG_NORM("Wrong CQ ID: %d\n", tmp);
 			pthread_mutex_unlock(&nvme_mutex);
 			return (NULL);
 		}
@@ -178,9 +176,7 @@ void * process_doorbell_thread(NVMEThread* nt)
 	/* SQ */
 		tmp = (addr - NVME_SQ0TDBL) / 8;
 		if (tmp > NVME_MAX_QID) {
-			printf("Wrong SQ ID: %d\n", tmp);
-			//sprintf (msg, "Wrong SQ ID: %d\n",tmp);
-			//LOG_ERR(msg);
+			LOG_NORM("Wrong SQ ID: %d\n", tmp);
 			pthread_mutex_unlock(&nvme_mutex);
 			return (NULL);
 		}
