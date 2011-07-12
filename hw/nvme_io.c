@@ -18,8 +18,11 @@
  */
 
 #include "nvme.h"
+#include "nvme_debug.h"
+
 
 /* queue is full if tail is just behind head. */
+
 static uint8_t is_cq_full(NVMEState *n, uint16_t qid)
 {
     return (n->cq[qid].tail + 1) % (n->cq[qid].size + 1) == n->cq[qid].head;
@@ -27,7 +30,7 @@ static uint8_t is_cq_full(NVMEState *n, uint16_t qid)
 
 static void incr_sq_head(NVMEIOSQueue *q)
 {
-	q->head = (q->head + 1) % (q->size + 1);
+    q->head = (q->head + 1) % (q->size + 1);
 }
 
 static void incr_cq_tail(NVMEIOCQueue *q)
@@ -42,80 +45,79 @@ static void incr_cq_tail(NVMEIOCQueue *q)
 
 static uint8_t abort_command(NVMEState *n, uint16_t sq_id, NVMECmd *sqe)
 {
-	uint16_t i;
+    uint16_t i;
 
-	for (i = 0; i < NVME_ABORT_COMMAND_LIMIT; i++) {
-		if (n->sq[sq_id].abort_cmd_id[i] == sqe->cid) {
-			n->sq[sq_id].abort_cmd_id[i] = NVME_EMPTY;
-			n->abort--;
-			return 1;
-		}
-	}
+    for (i = 0; i < NVME_ABORT_COMMAND_LIMIT; i++) {
+        if (n->sq[sq_id].abort_cmd_id[i] == sqe->cid) {
+            n->sq[sq_id].abort_cmd_id[i] = NVME_EMPTY;
+            n->abort--;
+            return 1;
+        }
+    }
 
-	return 0;
+    return 0;
 }
 
 void process_sq(NVMEState *n, uint16_t sq_id)
 {
-	target_phys_addr_t addr;
-	uint16_t cq_id;
-	NVMECmd sqe;
-	NVMECQE cqe;
-	uint32_t ret = NVME_SC_DATA_XFER_ERROR;
-	NVMEStatusField *sf = (NVMEStatusField*) &cqe.status;
+    target_phys_addr_t addr;
+    uint16_t cq_id;
+    NVMECmd sqe;
+    NVMECQE cqe;
+    uint32_t ret = NVME_SC_DATA_XFER_ERROR;
+    NVMEStatusField *sf = (NVMEStatusField *) &cqe.status;
 
+    cq_id = n->sq[sq_id].cq_id;
 
-	cq_id = n->sq[sq_id].cq_id;
-	if (is_cq_full(n, cq_id))
-		return;
+    if (is_cq_full(n, cq_id)) {
+        return;
+    }
+    memset(&cqe, 0, sizeof(cqe));
+    addr = n->sq[sq_id].dma_addr + n->sq[sq_id].head * sizeof(sqe);
 
-	memset(&cqe, 0, sizeof(cqe));
-	addr = n->sq[sq_id].dma_addr + n->sq[sq_id].head * sizeof(sqe);
+    nvme_dma_mem_read(addr, (uint8_t *)&sqe, sizeof(sqe));
 
-	nvme_dma_mem_read(addr, (uint8_t *)&sqe, sizeof(sqe));
+    if (n->abort) {
+        if (abort_command(n, sq_id, &sqe)) {
+            incr_sq_head(&n->sq[sq_id]);
+            return;
+        }
+    }
 
-	if (n->abort) {
-		if (abort_command(n, sq_id, &sqe)) {
-			incr_sq_head(&n->sq[sq_id]);
-			return;
-		}
-	}
+    if (sq_id == ASQ_ID) {
+        ret = nvme_admin_command(n, &sqe, &cqe);
+    } else {
+        ret = nvme_io_command(n, &sqe, &cqe);
+    }
+    cqe.sq_id = sq_id;
+    cqe.sq_head = n->sq[sq_id].head;
+    cqe.command_id = sqe.cid;
 
-	if (sq_id == ASQ_ID)
-		ret = nvme_admin_command(n, &sqe, &cqe);
-	else
-		ret = nvme_io_command(n, &sqe, &cqe);
-
-	cqe.sq_id = sq_id;
-	cqe.sq_head = n->sq[sq_id].head;
-	cqe.command_id = sqe.cid;
-
-	sf->p = n->cq[cq_id].phase_tag;
-	sf->m = 0;
-	sf->dnr = 0; /* TODO add support for dnr */
+    sf->p = n->cq[cq_id].phase_tag;
+    sf->m = 0;
+    sf->dnr = 0; /* TODO add support for dnr */
         /* write cqe to completion queue */
 
-	addr = n->cq[cq_id].dma_addr + n->cq[cq_id].tail * sizeof(cqe);
-	nvme_dma_mem_write(addr, (uint8_t *)&cqe, sizeof(cqe));
+    addr = n->cq[cq_id].dma_addr + n->cq[cq_id].tail * sizeof(cqe);
+    nvme_dma_mem_write(addr, (uint8_t *)&cqe, sizeof(cqe));
 
-	incr_sq_head(&n->sq[sq_id]);
-	incr_cq_tail(&n->cq[cq_id]);
+    incr_sq_head(&n->sq[sq_id]);
+    incr_cq_tail(&n->cq[cq_id]);
 
-	if (cq_id == ACQ_ID) {
-		/*
-		 3.1.9 says: "This queue is always associated
-				 with interrupt vector 0"
-		*/
-		msix_notify(&(n->dev), 0);
+    if (cq_id == ACQ_ID) {
+        /*
+         3.1.9 says: "This queue is always associated
+                 with interrupt vector 0"
+        */
+        msix_notify(&(n->dev), 0);
                 return;
-	}
+    }
 
-	if (n->cq[cq_id].irq_enabled) {
-//		printf("kw q: msix_notify(&pci, %d);\n", n->cq[cq_id].vector);
-                msix_notify(&(n->dev), n->cq[cq_id].vector);
-	} else {
-		printf("kw q: IRQ not enabled for CQ: %d;\n", cq_id);
-	}
+    if (n->cq[cq_id].irq_enabled) {
+        msix_notify(&(n->dev), n->cq[cq_id].vector);
+    } else {
+        printf("kw q: IRQ not enabled for CQ: %d;\n", cq_id);
+    }
 
 
 }
