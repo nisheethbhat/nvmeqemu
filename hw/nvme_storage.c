@@ -18,6 +18,7 @@
  */
 
 #include "nvme.h"
+#include "nvme_debug.h"
 #include <sys/mman.h>
 
 #define NVME_STORAGE_FILE_NAME "nvme_store.img"
@@ -27,22 +28,20 @@
 void nvme_dma_mem_read(target_phys_addr_t addr, uint8_t *buf, int len)
 {
     cpu_physical_memory_rw(addr, buf, len, 0);
-
 }
 
 void nvme_dma_mem_write(target_phys_addr_t addr, uint8_t *buf, int len)
 {
-        cpu_physical_memory_rw(addr, buf, len, 1);
+    cpu_physical_memory_rw(addr, buf, len, 1);
 }
 
 static uint8_t do_rw_prp(NVMEState *n, uint64_t mem_addr, uint64_t data_size,
              uint64_t file_offset, uint8_t rw)
 {
     uint8_t *mapping_addr = n->mapping_addr;
-
-        uint64_t m_offset = 0;
-        uint64_t f_offset = file_offset;
-        uint64_t total = data_size;
+    uint64_t m_offset = 0;
+    uint64_t f_offset = file_offset;
+    uint64_t total = data_size;
     uint64_t len = 0;
 
     while (total != 0) {
@@ -54,14 +53,14 @@ static uint8_t do_rw_prp(NVMEState *n, uint64_t mem_addr, uint64_t data_size,
         switch (rw) {
         case NVME_CMD_READ:
             nvme_dma_mem_write(mem_addr + m_offset,
-                    mapping_addr + f_offset, len);
+                mapping_addr + f_offset, len);
             break;
         case NVME_CMD_WRITE:
             nvme_dma_mem_read(mem_addr + m_offset,
-                    mapping_addr + f_offset, len);
+                mapping_addr + f_offset, len);
             break;
         default:
-            printf("Error- wrong opcode: %d\n", rw);
+            LOG_NORM("Error- wrong opcode: %d\n", rw);
             break;
         }
 
@@ -100,7 +99,7 @@ static uint8_t do_rw_prp_list(NVMEState *n, NVMECmd *command)
     total = total - PAGE_SIZE;
     offset = offset + PAGE_SIZE;
 
-    /* printf("sizeof(prp_list) %d\n", sizeof(prp_list)); */
+    /* LOG_NORM("sizeof(prp_list) %d\n", sizeof(prp_list)); */
     memset(prp_list, 0, sizeof(prp_list));
     nvme_dma_mem_read(cmd->prp2, (uint8_t *)prp_list, sizeof(prp_list));
 
@@ -108,7 +107,7 @@ static uint8_t do_rw_prp_list(NVMEState *n, NVMECmd *command)
     while (total != 0) {
         if (i == 511) {
             nvme_dma_mem_read(prp_list[511], (uint8_t *)prp_list,
-                             sizeof(prp_list));
+                sizeof(prp_list));
             i = 0;
         }
 
@@ -140,25 +139,25 @@ uint8_t nvme_io_command(NVMEState *n, NVMECmd *sqe, NVMECQE *cqe)
 
     if ((sqe->opcode != NVME_CMD_READ) &&
         (sqe->opcode != NVME_CMD_WRITE)) {
-        printf("Wrong IO opcode:\t\t0x%02x\n", sqe->opcode);
+        LOG_NORM("Wrong IO opcode:\t\t0x%02x\n", sqe->opcode);
         return res;
     }
 
     if (!e->prp2) {
-                res = do_rw_prp(n, e->prp1,
-             ((e->nlb + 1) * NVME_BLOCK_SIZE),
-             (e->slba * NVME_BLOCK_SIZE), e->opcode);
+        res = do_rw_prp(n, e->prp1,
+            ((e->nlb + 1) * NVME_BLOCK_SIZE),
+            (e->slba * NVME_BLOCK_SIZE), e->opcode);
     } else if ((e->nlb + 1) <= 2 * (PAGE_SIZE/NVME_BLOCK_SIZE)) {
         res = do_rw_prp(n, e->prp1, PAGE_SIZE,
-        e->slba * NVME_BLOCK_SIZE, e->opcode);
+            e->slba * NVME_BLOCK_SIZE, e->opcode);
 
         if (res == FAIL) {
             return FAIL;
         }
         res = do_rw_prp(n, e->prp2,
-                (e->nlb + 1) * NVME_BLOCK_SIZE - PAGE_SIZE,
-                e->slba * NVME_BLOCK_SIZE + PAGE_SIZE,
-                e->opcode);
+            (e->nlb + 1) * NVME_BLOCK_SIZE - PAGE_SIZE,
+            e->slba * NVME_BLOCK_SIZE + PAGE_SIZE,
+            e->opcode);
 
         if (res == FAIL) {
             return FAIL;
@@ -166,16 +165,15 @@ uint8_t nvme_io_command(NVMEState *n, NVMECmd *sqe, NVMECQE *cqe)
     } else {
         res = do_rw_prp_list(n, sqe);
     }
-
     return res;
 }
 
 static int nvme_create_storage_file(NVMEState *n)
 {
     n->fd = open(NVME_STORAGE_FILE_NAME, O_RDWR | O_CREAT
-                | O_TRUNC, S_IRUSR | S_IWUSR);
+        | O_TRUNC, S_IRUSR | S_IWUSR);
     posix_fallocate(n->fd, 0, NVME_STORAGE_FILE_SIZE);
-    printf("Backing store created with fd %d\n", n->fd);
+    LOG_NORM("Backing store created with fd %d\n", n->fd);
     close(n->fd);
     n->fd = -1;
     return 0;
@@ -184,16 +182,14 @@ static int nvme_create_storage_file(NVMEState *n)
 int nvme_close_storage_file(NVMEState *n)
 {
     if (n->fd != -1) {
-            if (n->mapping_addr) {
-
-                munmap(n->mapping_addr, n->mapping_size);
-                n->mapping_addr = NULL;
-                n->mapping_size = 0;
-            }
-            close(n->fd);
+        if (n->mapping_addr) {
+            munmap(n->mapping_addr, n->mapping_size);
+            n->mapping_addr = NULL;
+            n->mapping_size = 0;
+        }
+        close(n->fd);
         n->fd = -1;
     }
-
     return 0;
 }
 
@@ -207,7 +203,7 @@ int nvme_open_storage_file(NVMEState *n)
     }
 
     if (stat(NVME_STORAGE_FILE_NAME, &st) != 0 ||
-            st.st_size != NVME_STORAGE_FILE_SIZE) {
+        st.st_size != NVME_STORAGE_FILE_SIZE) {
         nvme_create_storage_file(n);
     }
 
@@ -226,6 +222,6 @@ int nvme_open_storage_file(NVMEState *n)
     n->mapping_size = NVME_STORAGE_FILE_SIZE;
     n->mapping_addr = mapping_addr;
 
-    printf("Backing store mapped to %p\n", n->mapping_addr);
+    LOG_NORM("Backing store mapped to %p\n", n->mapping_addr);
     return 0;
 }

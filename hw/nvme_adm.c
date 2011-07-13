@@ -18,6 +18,7 @@
  */
 
 #include "nvme.h"
+#include "nvme_debug.h"
 
 static uint32_t adm_cmd_del_sq(NVMEState *n, NVMECmd *cmd, NVMECQE *cqe);
 static uint32_t adm_cmd_alloc_sq(NVMEState *n, NVMECmd *cmd, NVMECQE *cqe);
@@ -54,7 +55,7 @@ uint8_t nvme_admin_command(NVMEState *n, NVMECmd *sqe, NVMECQE *cqe)
     adm_command_func *f;
 
     if ((sqe->opcode >= NVME_ADM_CMD_LAST) ||
-       (!adm_cmds_funcs[sqe->opcode])) {
+        (!adm_cmds_funcs[sqe->opcode])) {
         sf->sc = NVME_SC_INVALID_OPCODE;
     } else {
         f = adm_cmds_funcs[sqe->opcode];
@@ -69,7 +70,7 @@ static uint32_t adm_check_cqid(NVMEState *n, uint16_t cqid)
     if (!n) {
         return FAIL;
     }
-    printf("kw q: check if exists cqid %d\n", cqid);
+    LOG_NORM("kw q: check if exists cqid %d\n", cqid);
     /* If queue is allocated dma_addr!=NULL and has the same ID */
     for (i = 0; i < NVME_MAX_QID; i++) {
         if (n->cq[i].dma_addr && n->cq[i].id == cqid) {
@@ -164,10 +165,10 @@ static uint32_t adm_cmd_del_sq(NVMEState *n, NVMECmd *cmd, NVMECQE *cqe)
     NVMEStatusField *sf = (NVMEStatusField *)&cqe->status;
     sf->sc = NVME_SC_SUCCESS;
 
-    printf("%s(): called\n", __func__);
+    LOG_NORM("%s(): called\n", __func__);
 
     if (cmd->opcode != NVME_ADM_CMD_DELETE_SQ) {
-        printf("%s(): Invalid opcode %d\n", __func__, cmd->opcode);
+        LOG_NORM("%s(): Invalid opcode %d\n", __func__, cmd->opcode);
         sf->sc = NVME_SC_INVALID_OPCODE;
         return FAIL;
     }
@@ -231,10 +232,10 @@ static uint32_t adm_cmd_alloc_sq(NVMEState *n, NVMECmd *cmd, NVMECQE *cqe)
     NVMEStatusField *sf = (NVMEStatusField *)&cqe->status;
     sf->sc = NVME_SC_SUCCESS;
 
-    printf("%s(): called\n", __func__);
+    LOG_NORM("%s(): called\n", __func__);
 
     if (cmd->opcode != NVME_ADM_CMD_CREATE_SQ) {
-        printf("%s(): Invalid opcode %d\n", __func__, cmd->opcode);
+        LOG_NORM("%s(): Invalid opcode %d\n", __func__, cmd->opcode);
         sf->sc = NVME_SC_INVALID_OPCODE;
         return FAIL;
     }
@@ -268,7 +269,7 @@ static uint32_t adm_cmd_alloc_sq(NVMEState *n, NVMECmd *cmd, NVMECQE *cqe)
     }
 
     if (c->pc == 0) {
-        printf("Non physicaly contiguous memory !\n"
+        LOG_NORM("Non physicaly contiguous memory !\n"
             "Not supported yet\n");
         /* Check chapter 5.4 in spec */
         sf->sc = NVME_SC_INVALID_FIELD;
@@ -277,7 +278,7 @@ static uint32_t adm_cmd_alloc_sq(NVMEState *n, NVMECmd *cmd, NVMECQE *cqe)
 
     /* In PRP1 is DMA address. Chapter 5.4, Figure 36 */
     if (c->prp1 == 0) {
-        printf("No address\n");
+        LOG_NORM("No address\n");
         sf->sc = NVME_SC_INVALID_FIELD;
         return FAIL;
     }
@@ -285,7 +286,7 @@ static uint32_t adm_cmd_alloc_sq(NVMEState *n, NVMECmd *cmd, NVMECQE *cqe)
     i = adm_get_free_sq(n);
     if (i == NVME_MAX_QID) {
         /* Failed */
-        printf("No free queue ID ???\n");
+        LOG_NORM("No free queue ID ???\n");
         sf->sct = NVME_SCT_CMD_SPEC_ERR;
         sf->sc = NVME_INVALID_QUEUE_IDENTIFIER;
         return FAIL;
@@ -299,9 +300,9 @@ static uint32_t adm_cmd_alloc_sq(NVMEState *n, NVMECmd *cmd, NVMECQE *cqe)
     sq->prio = c->qprio;
     sq->dma_addr = c->prp1;
 
-    printf("sq->id %d, sq->dma_addr 0x%x, %lu\n",
+    LOG_NORM("sq->id %d, sq->dma_addr 0x%x, %lu\n",
         sq->id, (unsigned int)sq->dma_addr,
-         (unsigned long int)sq->dma_addr);
+        (unsigned long int)sq->dma_addr);
 
     /* Mark CQ as used by this queue. */
     n->cq[adm_get_cq(n, c->cqid)].usage_cnt++;
@@ -317,16 +318,16 @@ static uint32_t adm_cmd_del_cq(NVMEState *n, NVMECmd *cmd, NVMECQE *cqe)
     NVMEStatusField *sf = (NVMEStatusField *)&cqe->status;
     sf->sc = NVME_SC_SUCCESS;
 
-    printf("%s(): called\n", __func__);
+    LOG_NORM("%s(): called\n", __func__);
 
     if (cmd->opcode != NVME_ADM_CMD_DELETE_CQ) {
-        printf("%s(): Invalid opcode %d\n", __func__, cmd->opcode);
+        LOG_NORM("%s(): Invalid opcode %d\n", __func__, cmd->opcode);
         sf->sc = NVME_SC_INVALID_OPCODE;
         return FAIL;
     }
 
     if (c->qid == 0 || c->qid > NVME_MAX_QID) {
-        printf("Invalid Queue ID %d\n", c->qid);
+        LOG_NORM("Invalid Queue ID %d\n", c->qid);
         sf->sct = NVME_SCT_CMD_SPEC_ERR;
         sf->sc = NVME_INVALID_QUEUE_IDENTIFIER;
         return FAIL;
@@ -334,7 +335,7 @@ static uint32_t adm_cmd_del_cq(NVMEState *n, NVMECmd *cmd, NVMECQE *cqe)
 
     i = adm_get_cq(n, c->qid);
     if (i == NVME_MAX_QID) {
-        printf("No such queue: CQ %d\n", c->qid);
+        LOG_NORM("No such queue: CQ %d\n", c->qid);
         sf->sct = NVME_SCT_CMD_SPEC_ERR;
         sf->sc = NVME_INVALID_QUEUE_IDENTIFIER;
         return FAIL;
@@ -348,7 +349,7 @@ static uint32_t adm_cmd_del_cq(NVMEState *n, NVMECmd *cmd, NVMECQE *cqe)
 
     /* Do not allow to delete CQ when some SQ is pointing on it. */
     if (cq->usage_cnt) {
-        printf("Error. Some sq are still connected to CQ %d\n", c->qid);
+        LOG_NORM("Error. Some sq are still connected to CQ %d\n", c->qid);
         sf->sc = NVME_SC_INVALID_FIELD;
         return NVME_SC_INVALID_FIELD;
     }
@@ -371,15 +372,15 @@ static uint32_t adm_cmd_alloc_cq(NVMEState *n, NVMECmd *cmd, NVMECQE *cqe)
     NVMEStatusField *sf = (NVMEStatusField *)&cqe->status;
     sf->sc = NVME_SC_SUCCESS;
 
-    printf("%s(): called\n", __func__);
+    LOG_NORM("%s(): called\n", __func__);
 
     if (cmd->opcode != NVME_ADM_CMD_CREATE_CQ) {
-        printf("%s(): Invalid opcode %d\n", __func__, cmd->opcode);
+        LOG_NORM("%s(): Invalid opcode %d\n", __func__, cmd->opcode);
         sf->sc = NVME_SC_INVALID_OPCODE;
         return FAIL;
     }
 
-/*    Check chapter 5.3 NVM Express 1_0 spec
+    /* Check chapter 5.3 NVM Express 1_0 spec
     if c->pc is set to ‘1’, then c->prp1 specifies a 64-bit base memory
     address pointer of the Completion Queue that is physically contiguous
     and is memory page aligned.
@@ -387,17 +388,17 @@ static uint32_t adm_cmd_alloc_cq(NVMEState *n, NVMECmd *cmd, NVMECQE *cqe)
     if c->pc  is cleared to ‘0’, then this field specifies a PRP List
     pointer that describes the list of pages that constitute the
     Completion Queue and is memory page aligned
-*/
+    */
 
     if (c->pc == 0) {
         /*TODO: add support for list of pages */
-        printf("c->pc == 0 Not supported yet\n");
+        LOG_NORM("c->pc == 0 Not supported yet\n");
         sf->sc = NVME_SC_INVALID_FIELD;
         return FAIL;
     }
 
     if (c->qid == 0 || c->qid >= NVME_MAX_QID) {
-        printf("c->qid == 0 || c->qid >= NVME_MAX_QID\n");
+        LOG_NORM("c->qid == 0 || c->qid >= NVME_MAX_QID\n");
         sf->sct = NVME_SCT_CMD_SPEC_ERR;
         sf->sc = NVME_INVALID_QUEUE_IDENTIFIER;
         return FAIL;
@@ -405,7 +406,7 @@ static uint32_t adm_cmd_alloc_cq(NVMEState *n, NVMECmd *cmd, NVMECQE *cqe)
 
     /* check if CQ exists., If yes return error */
     if (!adm_check_cqid(n, c->qid)) {
-        printf("Invalid CQ ID %d\n", c->qid);
+        LOG_NORM("Invalid CQ ID %d\n", c->qid);
         sf->sct = NVME_SCT_CMD_SPEC_ERR;
         sf->sc = NVME_INVALID_QUEUE_IDENTIFIER;
         return FAIL;
@@ -413,8 +414,8 @@ static uint32_t adm_cmd_alloc_cq(NVMEState *n, NVMECmd *cmd, NVMECQE *cqe)
 
     /* Queue Size */
     if (c->qsize > n->ctrlcap.mqes) {
-        printf("c->qsize %d, n->ctrlcap.mqes %d\n",
-                         c->qsize, n->ctrlcap.mqes);
+        LOG_NORM("c->qsize %d, n->ctrlcap.mqes %d\n",
+            c->qsize, n->ctrlcap.mqes);
         sf->sct = NVME_SCT_CMD_SPEC_ERR;
         sf->sc = NVME_MAX_QUEUE_SIZE_EXCEEDED;
         return FAIL;
@@ -422,14 +423,14 @@ static uint32_t adm_cmd_alloc_cq(NVMEState *n, NVMECmd *cmd, NVMECQE *cqe)
 
     /* In PRP1 is DMA address. */
     if (c->prp1 == 0) {
-        printf("c->prp1 == 0\n");
+        LOG_NORM("c->prp1 == 0\n");
         sf->sc = NVME_SC_INVALID_FIELD;
         return FAIL;
     }
 
     i = adm_get_free_cq(n);
     if (i == NVME_MAX_QID) {
-        printf("i == NVME_MAX_QID\n");
+        LOG_NORM("i == NVME_MAX_QID\n");
         sf->sc = NVME_SC_INVALID_FIELD;
         return FAIL;
     }
@@ -442,8 +443,8 @@ static uint32_t adm_cmd_alloc_cq(NVMEState *n, NVMECmd *cmd, NVMECQE *cqe)
     cq->vector = c->iv;
     cq->phase_tag = 1;
 
-    printf("kw q: cq[%d] phase_tag   %d\n", cq->id, cq->phase_tag);
-    printf("kw q: msix vector. cq[%d] vector %d irq_enabled %d\n",
+    LOG_NORM("kw q: cq[%d] phase_tag   %d\n", cq->id, cq->phase_tag);
+    LOG_NORM("kw q: msix vector. cq[%d] vector %d irq_enabled %d\n",
                      cq->id, cq->vector, cq->irq_enabled);
     cq->size = c->qsize;
     cq->phys_contig = c->pc;
@@ -457,12 +458,12 @@ static uint32_t adm_cmd_get_log_page(NVMEState *n, NVMECmd *cmd, NVMECQE *cqe)
     sf->sc = NVME_SC_SUCCESS;
 
     if (cmd->opcode != NVME_ADM_CMD_GET_LOG_PAGE) {
-        printf("%s(): Invalid opcode %d\n", __func__, cmd->opcode);
+        LOG_NORM("%s(): Invalid opcode %d\n", __func__, cmd->opcode);
         sf->sc = NVME_SC_INVALID_OPCODE;
         return FAIL;
     }
 
-    printf("%s(): called\n", __func__);
+    LOG_NORM("%s(): called\n", __func__);
 
     return 0;
 }
@@ -472,7 +473,7 @@ static uint32_t adm_cmd_id_ctrl(NVMEState *n, NVMECmd *cmd)
     NVMEIdentifyController *ctrl;
     struct power_state_description *power;
 
-    printf("%s(): called\n", __func__);
+    LOG_NORM("%s(): called\n", __func__);
 
     ctrl = qemu_mallocz(sizeof(*ctrl));
 
@@ -503,18 +504,19 @@ static uint32_t adm_cmd_id_ctrl(NVMEState *n, NVMECmd *cmd)
 
     power = (struct power_state_description *)&(ctrl->psd0);
     power->mp = 1;
-    /* printf("psd0[0] %x, psd0[1] %x\n", ctrl->psd0[0], ctrl->psd0[1]); */
+    /* LOG_NORM("psd0[0] %x, psd0[1] %x\n", ctrl->psd0[0], ctrl->psd0[1]); */
 
     power = (struct power_state_description *)&(ctrl->psdx[0]);
     power->mp = 2;
-    /* printf("psdx[0] %x, psdx[1] %x\n", ctrl->psdx[0], ctrl->psdx[1]); */
+    /* LOG_NORM("psdx[0] %x, psdx[1] %x\n", ctrl->psdx[0], ctrl->psdx[1]); */
 
     power = (struct power_state_description *)&(ctrl->psdx[32]);
     power->mp = 3;
-    /* printf("psdx[32] %x, psdx[33] %x\n", ctrl->psdx[32], ctrl->psdx[33]); */
+    /* LOG_NORM("psdx[32] %x, psdx[33] %x\n", ctrl->psdx[32],
+     * ctrl->psdx[33]); */
 
-    printf("%s(): copying %lu data into addr %lu\n",
-                __func__, sizeof(*ctrl), cmd->prp1);
+    LOG_NORM("%s(): copying %lu data into addr %lu\n",
+        __func__, sizeof(*ctrl), cmd->prp1);
 
     nvme_dma_mem_write(cmd->prp1, (uint8_t *)ctrl, sizeof(*ctrl));
 
@@ -527,17 +529,17 @@ static uint32_t adm_cmd_id_ns(NVMEState *n, NVMECmd *cmd)
 {
     NVMEIdentifyNamespace *ns;
 
-    printf("%s(): called\n", __func__);
+    LOG_NORM("%s(): called\n", __func__);
 
     ns = qemu_mallocz(sizeof(*ns));
     if (!ns) {
         return FAIL;
     }
-    printf("%s(): copying %lu data into addr %lu\n",
-                     __func__, sizeof(*ns), cmd->prp1);
+    LOG_NORM("%s(): copying %lu data into addr %lu\n",
+        __func__, sizeof(*ns), cmd->prp1);
 
 
-{
+
     ns->nsze = NVME_TOTAL_BLOCKS;
     ns->ncap = NVME_TOTAL_BLOCKS;
     ns->nuse = NVME_TOTAL_BLOCKS;
@@ -548,8 +550,8 @@ static uint32_t adm_cmd_id_ns(NVMEState *n, NVMECmd *cmd)
     ns->lbaf0.lbads = 9;
 
     ns->flbas = 0;    /* [26] Formatted LBA Size */
-    printf("kw q: ns->ncap: %lu\n", ns->ncap);
-}
+    LOG_NORM("kw q: ns->ncap: %lu\n", ns->ncap);
+
 
     nvme_dma_mem_write(cmd->prp1, (void *)ns, sizeof(*ns));
 
@@ -566,21 +568,21 @@ static uint32_t adm_cmd_identify(NVMEState *n, NVMECmd *cmd, NVMECQE *cqe)
     NVMEStatusField *sf = (NVMEStatusField *)&cqe->status;
     sf->sc = NVME_SC_SUCCESS;
 
-    printf("%s(): called\n", __func__);
+    LOG_NORM("%s(): called\n", __func__);
 
     if (cmd->opcode != NVME_ADM_CMD_IDENTIFY) {
-        printf("%s(): Invalid opcode %d\n", __func__, cmd->opcode);
+        LOG_NORM("%s(): Invalid opcode %d\n", __func__, cmd->opcode);
         sf->sc = NVME_SC_INVALID_OPCODE;
         return FAIL;
     }
     if (c->prp2) {
         /* Don't like it! */
-        printf("%s(): prp2 is set\n", __func__);
+        LOG_NORM("%s(): prp2 is set\n", __func__);
     }
 
     if (c->prp1 == 0) {
         /* Error!*/
-        printf("%s(): prp1 is not set\n", __func__);
+        LOG_NORM("%s(): prp1 is not set\n", __func__);
         sf->sc = NVME_SC_INVALID_OPCODE;
         return FAIL;
     }
@@ -601,16 +603,16 @@ static uint32_t adm_cmd_identify(NVMEState *n, NVMECmd *cmd, NVMECQE *cqe)
 }
 
 
-/*5.1 Abort command
-The Abort command is used to cancel/abort a specific I/O command previously
-issued to the Admin or an I/O Submission Queue.Host software may have
-multiple Abort commands outstanding, subject to the constraints of the
-Abort Command Limit indicated in the Identify Controller data structure.
-An abort is a best effort command; the command to abort may have already
-completed, currently be in execution, or may be deeply queued.
-It is implementation specific if/when a controller chooses to complete
-the command with an error (i.e., Requested Command to Abort Not Found)
-when the command to abort is not found.
+/* 5.1 Abort command
+ * The Abort command is used to cancel/abort a specific I/O command previously
+ * issued to the Admin or an I/O Submission Queue.Host software may have
+ * multiple Abort commands outstanding, subject to the constraints of the
+ * Abort Command Limit indicated in the Identify Controller data structure.
+ * An abort is a best effort command; the command to abort may have already
+ * completed, currently be in execution, or may be deeply queued.
+ * It is implementation specific if/when a controller chooses to complete
+ * the command with an error (i.e., Requested Command to Abort Not Found)
+ * when the command to abort is not found.
 */
 static uint32_t adm_cmd_abort(NVMEState *n, NVMECmd *cmd, NVMECQE *cqe)
 {
@@ -622,10 +624,10 @@ static uint32_t adm_cmd_abort(NVMEState *n, NVMECmd *cmd, NVMECQE *cqe)
     NVMEStatusField *sf = (NVMEStatusField *)&cqe->status;
     sf->sc = NVME_SC_SUCCESS;
 
-    printf("%s(): called\n", __func__);
+    LOG_NORM("%s(): called\n", __func__);
 
     if (cmd->opcode != NVME_ADM_CMD_ABORT) {
-        printf("%s(): Invalid opcode %d\n", __func__, cmd->opcode);
+        LOG_NORM("%s(): Invalid opcode %d\n", __func__, cmd->opcode);
         sf->sc = NVME_SC_INVALID_OPCODE;
         return FAIL;
     }
@@ -636,7 +638,7 @@ static uint32_t adm_cmd_abort(NVMEState *n, NVMECmd *cmd, NVMECQE *cqe)
     }
 
     if (c->sqid == ASQ_ID) {
-        printf("Abort command for admin queue is not supported\n");
+        LOG_NORM("Abort command for admin queue is not supported\n");
         /* cmd_specific = NVME_CMD_ERR_ABORT_CMD */
         /* cqe->status = NVME_SC_SUCCESS << 1; */
         sf->sct = NVME_SCT_CMD_SPEC_ERR;
@@ -724,7 +726,7 @@ static uint32_t do_features(NVMEState *n, NVMECmd *cmd, NVMECQE *cqe)
         break;
 
     case NVME_FEATURE_LBA_RANGE_TYPE:
-        printf("NVME_FEATURE_LBA_RANGE_TYPE not supported yet\n");
+        LOG_NORM("NVME_FEATURE_LBA_RANGE_TYPE not supported yet\n");
         break;
 
     case NVME_FEATURE_TEMPERATURE_THRESHOLD:
@@ -772,7 +774,7 @@ static uint32_t do_features(NVMEState *n, NVMECmd *cmd, NVMECQE *cqe)
             n->feature.interrupt_vector_configuration = sqe->cdw11;
         } else {
             cqe->cmd_specific =
-                 n->feature.interrupt_vector_configuration;
+                n->feature.interrupt_vector_configuration;
         }
         break;
 
@@ -797,12 +799,12 @@ static uint32_t do_features(NVMEState *n, NVMECmd *cmd, NVMECQE *cqe)
     case NVME_FEATURE_SOFTWARE_PROGRESS_MARKER: /* Set Features only*/
         if (sqe->opcode == NVME_ADM_CMD_GET_FEATURES) {
             cqe->cmd_specific =
-                     n->feature.software_progress_marker;
+                n->feature.software_progress_marker;
         }
         break;
 
     default:
-        printf("Unknown feature ID: %d\n", sqe->fid);
+        LOG_NORM("Unknown feature ID: %d\n", sqe->fid);
         sf->sc = NVME_SC_INVALID_FIELD;
         break;
     }
@@ -816,14 +818,14 @@ static uint32_t adm_cmd_set_features(NVMEState *n, NVMECmd *cmd, NVMECQE *cqe)
     uint32_t res;
 
     if (cmd->opcode != NVME_ADM_CMD_SET_FEATURES) {
-        printf("%s(): Invalid opcode %d\n", __func__, cmd->opcode);
+        LOG_NORM("%s(): Invalid opcode %d\n", __func__, cmd->opcode);
         sf->sc = NVME_SC_INVALID_OPCODE;
         return FAIL;
     }
 
     res = do_features(n, cmd, cqe);
 
-    printf("%s(): called\n", __func__);
+    LOG_NORM("%s(): called\n", __func__);
     return res;
 }
 
@@ -833,14 +835,14 @@ static uint32_t adm_cmd_get_features(NVMEState *n, NVMECmd *cmd, NVMECQE *cqe)
     uint32_t res;
 
     if (cmd->opcode != NVME_ADM_CMD_GET_FEATURES) {
-        printf("%s(): Invalid opcode %d\n", __func__, cmd->opcode);
+        LOG_NORM("%s(): Invalid opcode %d\n", __func__, cmd->opcode);
         sf->sc = NVME_SC_INVALID_OPCODE;
         return FAIL;
     }
 
     res = do_features(n, cmd, cqe);
 
-    printf("%s(): called\n", __func__);
+    LOG_NORM("%s(): called\n", __func__);
     return res;
 }
 
@@ -851,11 +853,11 @@ static uint32_t adm_cmd_async_ev_req(NVMEState *n, NVMECmd *cmd, NVMECQE *cqe)
     sf->sc = NVME_SC_SUCCESS;
 
     if (cmd->opcode != NVME_ADM_CMD_ASYNC_EV_REQ) {
-        printf("%s(): Invalid opcode %d\n", __func__, cmd->opcode);
+        LOG_NORM("%s(): Invalid opcode %d\n", __func__, cmd->opcode);
         sf->sc = NVME_SC_INVALID_OPCODE;
         return FAIL;
     }
 
-    printf("%s(): called\n", __func__);
+    LOG_NORM("%s(): called\n", __func__);
     return 0;
 }

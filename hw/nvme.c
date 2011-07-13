@@ -63,7 +63,7 @@ static void process_reg_writel(NVMEState *n, target_phys_addr_t addr,
             n->sq[ASQ_ID].size = val & 0xfff;
             n->cq[ACQ_ID].size = (val >> 16) & 0xfff;
             /*
-            printf("--->ASQS: %hu, ACQS: %hu\n",
+            LOG_NORM("--->ASQS: %hu, ACQS: %hu\n",
                     n->sq[ASQ_ID].size, n->cq[ACQ_ID].size);
             */
             break;
@@ -74,7 +74,7 @@ static void process_reg_writel(NVMEState *n, target_phys_addr_t addr,
             n->sq[ASQ_ID].dma_addr |=
                     (uint64_t)((uint64_t)val << 32);
             /*
-            printf("--->ASQ: %lu\n",
+            LOG_NORM("--->ASQ: %lu\n",
                  (uint64_t)n->sq[ASQ_ID].dma_addr);
             */
             break;
@@ -83,9 +83,9 @@ static void process_reg_writel(NVMEState *n, target_phys_addr_t addr,
             break;
         case (NVME_ACQ + 4):
             n->cq[ACQ_ID].dma_addr |=
-                    (uint64_t)((uint64_t)val << 32);
+                (uint64_t)((uint64_t)val << 32);
             /*
-            printf("--->ACQ: %lu\n",
+            LOG_NORM("--->ACQ: %lu\n",
                 (uint64_t)n->cq[ACQ_ID].dma_addr);
             */
             break;
@@ -94,7 +94,7 @@ static void process_reg_writel(NVMEState *n, target_phys_addr_t addr,
             break;
         }
     } else {
-        /* Doorbell write */
+          /* Doorbell write */
     }
 }
 
@@ -105,15 +105,13 @@ static uint16_t process_doorbell(NVMEState *n, target_phys_addr_t addr,
 
 
     /*Check if it is CQ or SQ doorbell */
-
-      tmp = (addr - NVME_SQ0TDBL) / sizeof(uint32_t);
+    tmp = (addr - NVME_SQ0TDBL) / sizeof(uint32_t);
     if (tmp % 2) {
         /* CQ */
         tmp = (addr - NVME_CQ0HDBL) / 8;
         if (tmp > NVME_MAX_QID) {
-            printf("Wrong CQ ID: %d\n", tmp);
-
-                        return 1;
+            LOG_NORM("Wrong CQ ID: %d\n", tmp);
+            return 1;
         }
 
         n->cq[tmp].head = val & 0xffff;
@@ -121,9 +119,8 @@ static uint16_t process_doorbell(NVMEState *n, target_phys_addr_t addr,
         /* SQ */
         tmp = (addr - NVME_SQ0TDBL) / 8;
         if (tmp > NVME_MAX_QID) {
-            printf("Wrong SQ ID: %d\n", tmp);
-
-                        return 1;
+            LOG_NORM("Wrong SQ ID: %d\n", tmp);
+            return 1;
         }
         n->sq[tmp].tail = val & 0xffff;
         do {
@@ -158,7 +155,7 @@ void *process_reg_writel_thread(void *nt)
     if (addr < NVME_SQ0TDBL) {
         pthread_mutex_lock(&nvme_mutex);
         LOG_DBG("Executing Thread %s() with ID : %d with Addr: 0x%08x",
-                __func__, (int)pthread_self(), (unsigned)addr);
+            __func__, (int)pthread_self(), (unsigned)addr);
         /* Re-Assigning the most updated state    */
         n = ntp->n;
         LOG_DBG("Mutex Locked %s()", __func__);
@@ -174,7 +171,7 @@ void *process_reg_writel_thread(void *nt)
             if (val & 1) {
                 if (n->cq[ACQ_ID].dma_addr &&
                     n->sq[ASQ_ID].dma_addr &&
-                   (!nvme_open_storage_file(n))) {
+                    (!nvme_open_storage_file(n))) {
                     n->cstatus.rdy = 1;
                     n->cq[ACQ_ID].phase_tag = 1;
                 }
@@ -186,7 +183,7 @@ void *process_reg_writel_thread(void *nt)
             n->sq[ASQ_ID].size = val & 0xfff;
             n->cq[ACQ_ID].size = (val >> 16) & 0xfff;
             /*
-            printf("--->ASQS: %hu, ACQS: %hu\n",
+            LOG_NORM("--->ASQS: %hu, ACQS: %hu\n",
                     n->sq[ASQ_ID].size, n->cq[ACQ_ID].size);
             */
             break;
@@ -197,7 +194,7 @@ void *process_reg_writel_thread(void *nt)
             n->sq[ASQ_ID].dma_addr |=
                     (uint64_t)((uint64_t)val << 32);
             /*
-            printf("--->ASQ: %lu\n",
+            LOG_NORM("--->ASQ: %lu\n",
                  (uint64_t)n->sq[ASQ_ID].dma_addr);
             */
             break;
@@ -208,7 +205,7 @@ void *process_reg_writel_thread(void *nt)
             n->cq[ACQ_ID].dma_addr |=
                     (uint64_t)((uint64_t)val << 32);
             /*
-            printf("--->ACQ: %lu\n",
+            LOG_NORM("--->ACQ: %lu\n",
                 (uint64_t)n->cq[ACQ_ID].dma_addr);
             */
             break;
@@ -248,7 +245,7 @@ void *process_doorbell_thread(void *nt)
 
     pthread_mutex_lock(&nvme_mutex);
     LOG_DBG("Executing Thread %s() with ID : %d with Addr: 0x%08x",
-            __func__, (int)pthread_self(), (unsigned)addr);
+        __func__, (int)pthread_self(), (unsigned)addr);
     /* Re-Assigning the most updated state */
     n =  ntp->n;
 
@@ -278,8 +275,6 @@ void *process_doorbell_thread(void *nt)
             free(ntp);
             return NULL;
         }
-
-
         n->sq[tmp].tail = val & 0xffff;
     #ifndef NVME_THREADED
         do {
@@ -304,8 +299,8 @@ static void nvme_mmio_writeb(void *opaque, target_phys_addr_t addr,
 {
     NVMEState *n = opaque;
 
-    printf("%s(): addr = 0x%08x, val = 0x%08x\n",
-                     __func__, (unsigned)addr, val);
+    LOG_NORM("%s(): addr = 0x%08x, val = 0x%08x\n",
+        __func__, (unsigned)addr, val);
     (void)n;
 }
 
@@ -321,7 +316,7 @@ static void nvme_mmio_writew(void *opaque, target_phys_addr_t addr,
     #else
         NVMEState *n = opaque;
     #endif
-    printf("%s(): addr = 0x%08x, val = 0x%08x\n", __func__,
+    LOG_NORM("%s(): addr = 0x%08x, val = 0x%08x\n", __func__,
         (unsigned)addr, val);
 
     /* Check if some registry was written */
@@ -334,7 +329,7 @@ static void nvme_mmio_writew(void *opaque, target_phys_addr_t addr,
 
             /* Same thread identifier th used for all the threads */
             if (pthread_create(&th, &pthread_attr, process_reg_writel_thread,
-                                (void *)nt->pt) != 0) {
+                (void *)nt->pt) != 0) {
                 LOG_NORM("Thread Create failed in: %s()\n", __func__);
             }
         #else
@@ -352,7 +347,7 @@ static void nvme_mmio_writew(void *opaque, target_phys_addr_t addr,
             nt->pt = nt;
             /* Same thread identifier th used for all the threads */
             if (pthread_create(&th, &pthread_attr, process_doorbell_thread,
-                       (void *)nt->pt) != 0) {
+                (void *)nt->pt) != 0) {
                 LOG_NORM("Thread Create failed in: %s()\n", __func__);
             }
         #else
@@ -384,7 +379,7 @@ static void nvme_mmio_writel(void *opaque, target_phys_addr_t addr,
             nt->pt = nt;
             /* Same thread identifier th used for all the threads */
             if (pthread_create(&th, &pthread_attr, process_reg_writel_thread,
-                    (void *)nt->pt) != 0) {
+                (void *)nt->pt) != 0) {
                 LOG_NORM("Thread Create failed in: %s()\n", __func__);
             }
 
@@ -403,7 +398,7 @@ static void nvme_mmio_writel(void *opaque, target_phys_addr_t addr,
             nt->pt = nt;
             /* Same thread identifier th used for all the threads */
             if (pthread_create(&th, &pthread_attr, process_doorbell_thread,
-                      (void *)nt->pt) != 0) {
+                (void *)nt->pt) != 0) {
                 LOG_NORM("Thread Create failed in: %s()\n", __func__);
             }
 
@@ -432,21 +427,20 @@ void *process_reg_readl_thread(void *nt)
 
     pthread_mutex_lock(&nvme_mutex);
     LOG_DBG("Executing Thread %s() with ID : %d with Addr: 0x%08x", __func__,
-            (int)pthread_self(), (unsigned)addr);
+        (int)pthread_self(), (unsigned)addr);
 
     /* Re-assigning the most updated state    */
     n =  ntp->n;
-    printf("%s(): addr = 0x%08x\n", __func__, (unsigned)addr);
+    LOG_NORM("%s(): addr = 0x%08x\n", __func__, (unsigned)addr);
 
     switch (addr) {
     case NVME_CTST:
-        printf("%s(): Status required.\n", __func__);
+        LOG_NORM("%s(): Status required.\n", __func__);
 
         if ((n->cstatus.rdy) &&
-           (n->sq[ASQ_ID].dma_addr && n->cq[ACQ_ID].dma_addr)) {
-            printf("%s(): ADM QUEUES ARE SET. Return 1.\n",
-                                 __func__);
-
+            (n->sq[ASQ_ID].dma_addr && n->cq[ACQ_ID].dma_addr)) {
+            LOG_NORM("%s(): ADM QUEUES ARE SET. Return 1.\n",
+            __func__);
             ntp->val = 1;
         }
 
@@ -457,8 +451,8 @@ void *process_reg_readl_thread(void *nt)
         break;
 
     default:
-        printf("Register not supported. offset: 0x%x\n",
-                            (unsigned int) addr);
+        LOG_NORM("Register not supported. offset: 0x%x\n",
+            (unsigned int) addr);
         break;
     }
     pthread_mutex_unlock(&nvme_mutex);
@@ -470,7 +464,7 @@ void *process_reg_readl_thread(void *nt)
 static uint32_t nvme_mmio_readb(void *opaque, target_phys_addr_t addr)
 {
     NVMEState *n = opaque;
-    printf("%s(): addr = 0x%08x\n", __func__, (unsigned)addr);
+    LOG_NORM("%s(): addr = 0x%08x\n", __func__, (unsigned)addr);
     (void)n;
     return 0;
 }
@@ -479,7 +473,7 @@ static uint32_t nvme_mmio_readb(void *opaque, target_phys_addr_t addr)
 static uint32_t nvme_mmio_readw(void *opaque, target_phys_addr_t addr)
 {
     NVMEState *n = opaque;
-    printf("%s(): addr = 0x%08x\n", __func__, (unsigned)addr);
+    LOG_NORM("%s(): addr = 0x%08x\n", __func__, (unsigned)addr);
     (void)n;
     return 0;
 }
@@ -498,7 +492,7 @@ static uint32_t nvme_mmio_readl(void *opaque, target_phys_addr_t addr)
     nt->pt = nt;
     /* Same thread identifier th used for all the threads */
     if (pthread_create(&th, &pthread_attr, process_reg_readl_thread,
-            (void *)nt->pt) != 0) {
+        (void *)nt->pt) != 0) {
         LOG_NORM("Thread Create failed in: %s()\n", __func__);
     }
     pthread_join(th, NULL);
@@ -508,18 +502,21 @@ static uint32_t nvme_mmio_readl(void *opaque, target_phys_addr_t addr)
 
 #else
     NVMEState *n = opaque;
-    printf("%s(): addr = 0x%08x\n", __func__, (unsigned)addr);
+    LOG_NORM("%s(): addr = 0x%08x\n", __func__, (unsigned)addr);
 
     switch (addr) {
     case NVME_CTST:
-        printf("%s(): Status required.\n", __func__);
+        LOG_NORM("%s(): Status required.\n", __func__);
         if ((n->cstatus.rdy) &&
-           (n->sq[ASQ_ID].dma_addr && n->cq[ACQ_ID].dma_addr)) {
-            printf("%s(): ADM QUEUES ARE SET. Return 1.\n",
-                                 __func__);
+            (n->sq[ASQ_ID].dma_addr && n->cq[ACQ_ID].dma_addr)) {
+            LOG_NORM("%s(): ADM QUEUES ARE SET. Return 1.\n",
+            __func__);
             return 1;
         } else {
-
+            /*TODO Handle the case for read / writes when
+             * controller ready bit is not set or dma addresses
+             * are not set
+             */
         }
 
         break;
@@ -529,8 +526,8 @@ static uint32_t nvme_mmio_readl(void *opaque, target_phys_addr_t addr)
         break;
 
     default:
-        printf("Register not supported. offset: 0x%x\n",
-                            (unsigned int) addr);
+        LOG_NORM("Register not supported. offset: 0x%x\n",
+            (unsigned int) addr);
         break;
     }
     return 0;
@@ -556,7 +553,7 @@ static void nvme_mmio_map(PCIDevice *pci_dev, int reg_num, pcibus_t addr,
     NVMEState *n = DO_UPCAST(NVMEState, dev, pci_dev);
 
     if (reg_num) {
-        printf("Only bar0 is allowed! reg_num: %d\n", reg_num);
+        LOG_NORM("Only bar0 is allowed! reg_num: %d\n", reg_num);
     }
     /* Is this hacking? */
     /* BAR 0 is shared: Registry, doorbells and MSI-X. Only
@@ -659,30 +656,30 @@ static int pci_nvme_init(PCIDevice *pci_dev)
     /*other notation:  pci_config[OFFSET] = 0xff; */
 
     /* FIXME: Is it OK? Interrupt PIN A */
-    printf("%s(): Setting PCI Interrupt PIN A\n", __func__);
+    LOG_NORM("%s(): Setting PCI Interrupt PIN A\n", __func__);
     pci_conf[PCI_INTERRUPT_PIN] = 1;
 
     n->nvectors = NVME_MSIX_NVECTORS;
     n->bar0_size = NVME_REG_SIZE;
-    printf("%s(): Reg0 size %u, nvectors: %hu\n", __func__,
+    LOG_NORM("%s(): Reg0 size %u, nvectors: %hu\n", __func__,
                         n->bar0_size, n->nvectors);
     ret = msix_init((struct PCIDevice *)&n->dev,
                          n->nvectors, 0, n->bar0_size);
     if (ret) {
-        printf("%s(): PCI MSI-X Failed\n", __func__);
+        LOG_NORM("%s(): PCI MSI-X Failed\n", __func__);
         return -1;
     }
-    printf("%s(): PCI MSI-X Initialized\n", __func__);
+    LOG_NORM("%s(): PCI MSI-X Initialized\n", __func__);
     /* NVMe is Little Endian. */
     n->mmio_index = cpu_register_io_memory(nvme_mmio_read, nvme_mmio_write,
                         n,  DEVICE_LITTLE_ENDIAN);
 
     /* Register BAR 0 (and bar 1 as it is 64bit). */
     pci_register_bar((struct PCIDevice *)&n->dev,
-            0, msix_bar_size((struct PCIDevice *)&n->dev),
-            (PCI_BASE_ADDRESS_SPACE_MEMORY |
-            PCI_BASE_ADDRESS_MEM_TYPE_64),
-            nvme_mmio_map);
+        0, msix_bar_size((struct PCIDevice *)&n->dev),
+        (PCI_BASE_ADDRESS_SPACE_MEMORY |
+        PCI_BASE_ADDRESS_MEM_TYPE_64),
+        nvme_mmio_map);
 
     for (ret = 0; ret < n->nvectors; ret++) {
         msix_vector_use(&n->dev, ret);
@@ -718,7 +715,7 @@ static int pci_nvme_init(PCIDevice *pci_dev)
     CPU_ZERO(&mask);
     CPU_SET(1, &mask);
     if (pthread_attr_setaffinity_np(&pthread_attr, sizeof(cpu_set_t),
-           &mask) < 0) {
+        &mask) < 0) {
         perror("pthread_setaffinity_np");
     }
     sch_param.sched_priority = sched_get_priority_max(SCHED_OTHER);
@@ -732,8 +729,7 @@ static int pci_nvme_uninit(PCIDevice *pci_dev)
 {
     NVMEState *n = DO_UPCAST(NVMEState, dev, pci_dev);
 
-        nvme_close_storage_file(n);
-
+    nvme_close_storage_file(n);
     return 0;
 }
 

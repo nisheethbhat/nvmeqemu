@@ -35,12 +35,11 @@ static void incr_sq_head(NVMEIOSQueue *q)
 
 static void incr_cq_tail(NVMEIOCQueue *q)
 {
-        q->tail = q->tail + 1;
-
-        if (q->tail > q->size) {
-                q->tail = 0;
-                q->phase_tag = !q->phase_tag;
-        }
+    q->tail = q->tail + 1;
+    if (q->tail > q->size) {
+        q->tail = 0;
+        q->phase_tag = !q->phase_tag;
+    }
 }
 
 static uint8_t abort_command(NVMEState *n, uint16_t sq_id, NVMECmd *sqe)
@@ -54,7 +53,6 @@ static uint8_t abort_command(NVMEState *n, uint16_t sq_id, NVMECmd *sqe)
             return 1;
         }
     }
-
     return 0;
 }
 
@@ -110,13 +108,13 @@ void process_sq(NVMEState *n, uint16_t sq_id)
                  with interrupt vector 0"
         */
         msix_notify(&(n->dev), 0);
-                return;
+        return;
     }
 
     if (n->cq[cq_id].irq_enabled) {
         msix_notify(&(n->dev), n->cq[cq_id].vector);
     } else {
-        printf("kw q: IRQ not enabled for CQ: %d;\n", cq_id);
+        LOG_NORM("kw q: IRQ not enabled for CQ: %d;\n", cq_id);
     }
 
 
