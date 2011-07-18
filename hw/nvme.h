@@ -31,14 +31,15 @@
 
 /* Flag for NVME threaded support */
 #define NVME_THREADED
-
-
+/* Path for PCI address space file */
+#define NVME_DEVICE_PCI_CONFIG_FILE "../hw/NVME_device_PCI_config"
 
 /* Should be in pci class someday. */
 #define PCI_CLASS_STORAGE_EXPRESS 0x010802
-/* */
+/* Device ID for NVME Device */
 #define NVME_DEV_ID 0x0111
-
+/* PMCAP Length */
+#define PMCAP_CAP_LENGTH 5
 /* Give 8kB for registers. Should be OK for 512 queues. */
 #define NVME_REG_SIZE (1024 * 8)
 
@@ -734,6 +735,21 @@ typedef struct NVMEThread {
     struct NVMEThread *pt;
 } NVMEThread;
 
+
+
+/* Config File Read Strucutre */
+typedef struct FILERead {
+    char cfg_name[50];
+    uint32_t offset;
+    uint32_t len;
+    uint32_t val;
+    uint32_t ro_mask;
+    uint32_t rw_mask;
+    uint32_t rwc_mask;
+    uint32_t rws_mask;
+} FILERead;
+
+enum {PCI_SPACE = 0, NVME_SPACE = 1};
 
 /* Initialize IO thread */
 int nvme_init_io_thread(NVMEState *n);

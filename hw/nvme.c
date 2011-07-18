@@ -30,9 +30,16 @@ pthread_mutex_t nvme_mutex = PTHREAD_MUTEX_INITIALIZER;
 /* Variables to set up Scheduling policies for NVME threads */
 pthread_attr_t pthread_attr;
 struct sched_param sch_param;
+/* Maximum number of charachters on a line in any config file */
+#define MAX_CHAR_PER_LINE 100
 
 static void clear_nvme_device(NVMEState *n);
-
+static void update_var(char* , FILERead *, int*, int *);
+static void update_val(char* , char*);
+static int read_config_file(FILE *, NVMEState *, uint8_t);
+static void pci_space_init(PCIDevice *);
+static void config_space_write(NVMEState *,  FILERead*, uint8_t,
+    uint8_t);
 
 #ifndef NVME_THREADED
 static void process_reg_writel(NVMEState *n, target_phys_addr_t addr,
@@ -562,6 +569,7 @@ static void nvme_mmio_map(PCIDevice *pci_dev, int reg_num, pcibus_t addr,
      * The MSI-X part of BAR0 should be mapped by MSI-X functions.
      * The msix_init function changes the bar size to add its
      * tables to it. */
+
     cpu_register_physical_memory(addr, n->bar0_size, n->mmio_index);
     n->bar0 = (void *) addr;
 
@@ -626,6 +634,370 @@ static void qdev_nvme_reset(DeviceState *dev)
     do_nvme_reset(n);
 }
 
+/*********************************************************************
+    Function     :    config_space_write
+    Description  :    Function for config space writes
+    Return Type  :    void
+    Arguments    :    NVMEState * : Pointer to NVME device state
+                      FILERead *  : Pointer to the data extracted from
+                                    <REG> </REG> from config file
+                      uint8_t : Flag for type of config space
+                              : 0 = PCI Config Space
+                              : 1 = NVME Config Space
+                      uint8_t : Dynamic offset ex:CAP pointer
+*********************************************************************/
+static void config_space_write(NVMEState *n, FILERead* data, uint8_t flag,
+    uint8_t offset)
+{
+    /* Pointer to config  space */
+    uint8_t *conf = NULL;
+    /* Pointers for masks (PCI space) */
+    uint8_t *wmask = NULL, *used = NULL, *cmask = NULL, *w1cmask = NULL;
+
+    if (PCI_SPACE == flag) {
+        conf = n->dev.config;
+        wmask = n->dev.wmask;
+        used = n->dev.used;
+        cmask = n->dev.cmask;
+        w1cmask = n->dev.w1cmask;
+    } else {
+        /* TODO
+         * Add the start address of NVME address Space
+         */
+    }
+
+    /* Write to config Space */
+
+    /*
+     * TODO
+     * Remove the if statement to make the function more generalized
+     * If condition addded since the number of mask pointers for PCI and
+     * NVME space are different and for PCI space it is already defined in Qemu
+     */
+    if (flag == PCI_SPACE) {
+        if (data->len == 1) {
+            pci_set_byte(&conf[data->offset + offset], (uint8_t) data->val);
+            pci_set_byte(&wmask[data->offset + offset],
+                (uint8_t) data->rw_mask);
+            pci_set_byte(&used[data->offset + offset], (uint8_t) 1);
+            pci_set_byte(&cmask[data->offset + offset], (uint8_t) 1);
+            pci_set_byte(&w1cmask[data->offset + offset],
+                (uint8_t) data->rwc_mask);
+        } else if (data->len == 2) {
+            pci_set_word(&conf[data->offset + offset], (uint16_t) data->val);
+            pci_set_word(&wmask[data->offset + offset],
+                (uint16_t) data->rw_mask);
+            pci_set_word(&used[data->offset + offset], (uint16_t) 1);
+            pci_set_word(&cmask[data->offset + offset], (uint16_t) 1);
+            pci_set_word(&w1cmask[data->offset + offset],
+                (uint16_t) data->rwc_mask);
+        } else if (data->len == 4) {
+            pci_set_long(&conf[data->offset + offset], (uint32_t) data->val);
+            pci_set_long(&wmask[data->offset + offset],
+                (uint32_t) data->rw_mask);
+            pci_set_long(&used[data->offset + offset], (uint32_t) 1);
+            pci_set_long(&cmask[data->offset + offset], (uint32_t) 1);
+            pci_set_long(&w1cmask[data->offset + offset],
+                (uint32_t) data->rwc_mask);
+        }
+    } else {
+        /* TODO
+         * Add NVME Space Read/Writes
+         */
+    }
+
+
+}
+/*********************************************************************
+    Function     :    read_config_file
+    Description  :    Function for reading config files
+    Return Type  :    int (0 : Success , 1 : Error)
+    Arguments    :    FILE *    : Config File Pointer
+                      NVMEState * : Pointer to NVME device state
+                      uint8_t : Flag for type of config space
+                              : 0 = PCI Config Space
+                              : 1 = NVME Config Space
+*********************************************************************/
+static int read_config_file(FILE *config_file , NVMEState *n, uint8_t flag)
+{
+    /* Temp array used to store a line in the file */
+    char var_line[MAX_CHAR_PER_LINE];
+    /* Start of Reg and End of Reg indicator */
+    int eor_flag = 0, sor_flag = 0;
+
+    /* Offset used for reads and writes*/
+    uint8_t offset = 0;
+    /* Recent Capabilities pointer value*/
+    uint8_t link = 0;
+
+    /* Structure to retain values for <REG to </REG> */
+    FILERead data;
+
+
+
+
+    /* Read the configuration file line by line */
+
+    if (fgets(var_line, MAX_CHAR_PER_LINE, config_file) == NULL) {
+        LOG_NORM("Config File cannot be read\n");
+        return 1;
+    }
+    do {
+        update_var((char *)var_line, &data, &eor_flag, &sor_flag);
+        if (sor_flag == 1) {
+            do {
+                /* Reading line after line between <REG and </REG> */
+                if (fgets(var_line, MAX_CHAR_PER_LINE, config_file) == NULL) {
+                    LOG_NORM("Wrong Format between <REG> and </REG>\n");
+                    return 1;
+                }
+                update_var((char *)var_line, &data, &eor_flag, &sor_flag);
+            } while (eor_flag != 1);
+
+            LOG_DBG("Length Read : %u\n", data.len);
+            LOG_DBG("Offset Read : %u\n", data.offset);
+            LOG_DBG("Val Read : %u\n", data.val);
+            LOG_DBG("RO Mask Read : %u\n", data.ro_mask);
+            LOG_DBG("RW Mask Read : %u\n", data.rw_mask);
+            LOG_DBG("RWC Mask Read : %u\n", data.rwc_mask);
+            LOG_DBG("RWS Mask Read : %u\n", data.rws_mask);
+            LOG_DBG("CFG NAME Read : %s\n", data.cfg_name);
+
+            /* Logic for extracting dependancy between different capabilites
+             * from file
+             */
+            if (!strcmp(data.cfg_name, "PCIHEADER")) {
+                offset = 0;
+                if (data.offset == 0x34) {
+                    link = data.val;
+                }
+            } else if (!strcmp(data.cfg_name, "PMCAP")) {
+
+                if (data.offset == 0) {
+                    /* One time per CFG_NAME */
+                    offset = link;
+                }
+                if (data.offset == 0 && data.len > 1) {
+                    link = (uint8_t) data.val >> 8;
+                } else if (data.offset == 1) {
+                    link = (uint8_t) data.val ;
+                }
+
+            } else if (!strcmp(data.cfg_name, "MSICAP")) {
+                if (data.offset == 0) {
+                    /* One time per CFG_NAME */
+                    offset = link;
+                }
+                if (data.offset == 0 && data.len > 1) {
+                    link = (uint8_t) data.val >> 8;
+                } else if (data.offset == 1) {
+                    link = (uint8_t) data.val ;
+                }
+            } else if (!strcmp(data.cfg_name, "MSIXCAP")) {
+                if (data.offset == 0) {
+                    /* One time per CFG_NAME */
+                    offset = link;
+                    /*TODO
+                    * Set QEMU_PCI_CAP_MSIX if present
+                    */
+                }
+                if (data.offset == 0 && data.len > 1) {
+                    link = (uint8_t) data.val >> 8;
+                } else if (data.offset == 1) {
+                    link = (uint8_t) data.val ;
+                }
+            } else if (!strcmp(data.cfg_name, "PXACP")) {
+                if (data.offset == 0) {
+                    /* One time per CFG_NAME */
+                    offset = link;
+                }
+                if (data.offset == 0 && data.len > 1) {
+                    link = (uint8_t) data.val >> 8;
+                } else if (data.offset == 1) {
+                    link = (uint8_t) data.val ;
+                }
+            } else if (!strcmp(data.cfg_name, "AERCAP")) {
+                if (data.offset == 0) {
+                    /* One time per CFG_NAME */
+                    offset = link;
+                }
+                if (data.offset == 0 && data.len > 3) {
+                    /* AERCAP pointer will take only 8 bits out of 12 bits */
+                    /* TODO
+                     * Extend it to 12 bits but as of now only
+                     * uint8_t pointers are defined for PCI address space
+                     * in Qemu
+                     */
+                    link = (uint8_t) data.val >> 20;
+                } else if (data.offset == 2) {
+                    link = (uint8_t) data.val >> 4 ;
+                }
+            }
+
+
+            if ((data.offset + offset + data.len) > 0x1000) {
+                LOG_ERR("Invlaid Offsets present in the Config file for \
+                    PCI address space \n");
+            } else {
+                /* PCI / NVME space writes */
+                config_space_write(n, &data, flag, offset);
+            }
+
+        }
+
+        /* Reseting the data strucutre */
+        data.len = 0;
+        data.offset = 0;
+        data.val = 0;
+        data.ro_mask = 0;
+        data.rw_mask = 0;
+        data.rwc_mask = 0;
+        data.rws_mask = 0;
+        bzero(data.cfg_name, sizeof(data.cfg_name));
+        /* Resetting the flags */
+        sor_flag = 0;
+        eor_flag = 0;
+    } while (fgets(var_line, MAX_CHAR_PER_LINE, config_file) != NULL);
+
+    return 0;
+}
+
+/*********************************************************************
+    Function     :    update_var
+    Description  :    Reads data variables (TAGS) from each line
+    Return Type  :    void
+    Arguments    :    char *: Single Line of config file
+                      FILERead *: Pointing to store the values
+                                  extracted
+                      int * : Pointer to Start of Reg Indicator
+                      int * : Pointer to End of Reg Indicator
+*********************************************************************/
+
+static void update_var(char *ptr , FILERead *data, int *eor, int *sor)
+{
+    /* Temp arrays for extracting TAGS and values respectivley */
+    char tags[MAX_CHAR_PER_LINE], val[MAX_CHAR_PER_LINE];
+    /* Offset used for parsing */
+    int offset = 0;
+
+    /* Reading of Data Variables from each line */
+    do {
+        if (*ptr != ' ' && *ptr != '\t' && *ptr != '\n' && *ptr != '\r') {
+            tags[offset] = (char)*ptr;
+            offset++;
+        }
+        ptr++;
+    } while (*ptr != '=' && *ptr != '>' && (offset < MAX_CHAR_PER_LINE));
+
+    tags[offset] = '\0';
+
+    /* Compare the TAGS and extract the values */
+    if (!strcmp(tags, "</REG")) {
+        *eor = 1;
+
+    } else if (!strcmp(tags, "<REG")) {
+        *sor = 1;
+
+    } else if (!strcmp(tags, "LENGTH")) {
+        /* Pointer pre-incremented to get rid of "=" sign
+         * while passing onto update_val function
+         */
+        update_val(++ptr, val);
+        data->len = (uint32_t) strtol(val, NULL, 16) ;
+    } else if (!strcmp(tags, "OFFSET")) {
+        update_val(++ptr, val);
+        data->offset = (uint32_t) strtol(val, NULL, 16) ;
+    } else if (!strcmp(tags, "VALUE")) {
+        update_val(++ptr, val);
+        data->val = (uint32_t) strtol(val, NULL, 16) ;
+    } else if (!strcmp(tags, "RO_MASK")) {
+        update_val(++ptr, val);
+        data->ro_mask = (uint32_t) strtol(val, NULL, 16) ;
+    } else if (!strcmp(tags, "RW_MASK")) {
+        update_val(++ptr, val);
+        data->rw_mask = (uint32_t) strtol(val, NULL, 16) ;
+    } else if (!strcmp(tags, "RWC_MASK")) {
+        update_val(++ptr, val);
+        data->rw_mask = (uint32_t) strtol(val, NULL, 16) ;
+    } else if (!strcmp(tags, "RWS_MASK")) {
+        update_val(++ptr, val);
+        data->rw_mask = (uint32_t) strtol(val, NULL, 16) ;
+    } else if (!strcmp(tags, "CFG_NAME")) {
+        update_val(++ptr, val);
+        strcpy(data->cfg_name, val);
+    }
+
+    return;
+}
+
+
+/*********************************************************************
+    Function     :    update_val
+    Description  :    Reads data values from each line
+    Return Type  :    void
+    Arguments    :    char * : Offset inside a single line in File
+                      char * : Pointer to store the values extracted
+*********************************************************************/
+static void update_val(char *ptr, char *val)
+{
+    int offset = 0;
+
+    /* Reading of Data Values from each line */
+    do {
+        if (*ptr != ' ' && *ptr != '\t' && *ptr != '\n' && *ptr != '\r') {
+            val[offset] = (char)*ptr;
+            offset++;
+        }
+        ptr++;
+    } while (*ptr != '\0' && (offset < MAX_CHAR_PER_LINE));
+    val[offset] = '\0';
+}
+
+/*********************************************************************
+    Function     :    pci_space_init
+    Description  :    Hardcoded PCI space initialization
+    Return Type  :    void
+    Arguments    :    PCIDevice * : Pointer to the PCI device
+*********************************************************************/
+static void pci_space_init(PCIDevice *pci_dev)
+{
+    NVMEState *n = DO_UPCAST(NVMEState, dev, pci_dev);
+    uint8_t *pci_conf = NULL;
+    uint32_t ret;
+
+    pci_conf = n->dev.config;
+
+    pci_config_set_vendor_id(pci_conf, PCI_VENDOR_ID_INTEL);
+    /* Device id is fake  */
+    pci_config_set_device_id(pci_conf, NVME_DEV_ID);
+
+    /* STORAGE EXPRESS is not yet a standard. */
+    pci_config_set_class(pci_conf, PCI_CLASS_STORAGE_EXPRESS >> 8);
+
+    pci_config_set_prog_interface(pci_conf,
+        0xf & PCI_CLASS_STORAGE_EXPRESS);
+
+    /* TODO: What with the rest of PCI fields? Capabilities? */
+
+    /*other notation:  pci_config[OFFSET] = 0xff; */
+
+    LOG_NORM("%s(): Setting PCI Interrupt PIN A\n", __func__);
+    pci_conf[PCI_INTERRUPT_PIN] = 1;
+
+    n->nvectors = NVME_MSIX_NVECTORS;
+    n->bar0_size = NVME_REG_SIZE;
+    ret = msix_init((struct PCIDevice *)&n->dev,
+        n->nvectors, 0, n->bar0_size);
+    if (ret) {
+        LOG_NORM("%s(): PCI MSI-X Failed\n", __func__);
+
+    } else {
+        LOG_NORM("%s(): PCI MSI-X Initialized\n", __func__);
+    }
+}
+
+
+
 /* Initialization routine
  *
  * FIXME: Make any initialization here or when
@@ -636,47 +1008,43 @@ static int pci_nvme_init(PCIDevice *pci_dev)
     NVMEState *n = DO_UPCAST(NVMEState, dev, pci_dev);
     uint8_t *pci_conf = NULL;
     uint32_t ret;
+    /* Pointer for Config Files */
+    FILE *config_file ;
     /* Processor 0        */
     cpu_set_t  mask;
 
     pci_conf = n->dev.config;
-    pci_config_set_vendor_id(pci_conf, PCI_VENDOR_ID_INTEL);
-    /* Device id is fake  */
-    pci_config_set_device_id(pci_conf, NVME_DEV_ID);
 
-    /* FIXME: Class is 24 bits, but this function takes 16 bits.*/
-    /* STORAGE EXPRESS is not yet a standard. */
-    pci_config_set_class(pci_conf, PCI_CLASS_STORAGE_EXPRESS >> 8);
-    /* FIXME: is it ok? */
-    pci_config_set_prog_interface(pci_conf,
-                0xf & PCI_CLASS_STORAGE_EXPRESS);
-
-    /* FIXME: What with the rest of PCI fields? Capabilities? */
-
-    /*other notation:  pci_config[OFFSET] = 0xff; */
-
-    /* FIXME: Is it OK? Interrupt PIN A */
-    LOG_NORM("%s(): Setting PCI Interrupt PIN A\n", __func__);
-    pci_conf[PCI_INTERRUPT_PIN] = 1;
-
+    config_file = fopen(NVME_DEVICE_PCI_CONFIG_FILE, "r");
+    if (config_file == NULL) {
+        LOG_ERR("Could not open the config file\n");
+        LOG_NORM("Defaulting the PCI space..\n");
+        pci_space_init(pci_dev);
+    } else {
+        /* Reads PCI config File */
+        if (read_config_file(config_file, n, PCI_SPACE)) {
+            fclose(config_file);
+            LOG_ERR("Error Reading the Config File\n");
+            LOG_NORM("Defaulting the PCI space..\n");
+            pci_space_init(pci_dev);
+        } else {
+            /* Close the File */
+            fclose(config_file);
+        }
+    }
     n->nvectors = NVME_MSIX_NVECTORS;
     n->bar0_size = NVME_REG_SIZE;
     LOG_NORM("%s(): Reg0 size %u, nvectors: %hu\n", __func__,
-                        n->bar0_size, n->nvectors);
-    ret = msix_init((struct PCIDevice *)&n->dev,
-                         n->nvectors, 0, n->bar0_size);
-    if (ret) {
-        LOG_NORM("%s(): PCI MSI-X Failed\n", __func__);
-        return -1;
-    }
-    LOG_NORM("%s(): PCI MSI-X Initialized\n", __func__);
+            n->bar0_size, n->nvectors);
+
     /* NVMe is Little Endian. */
     n->mmio_index = cpu_register_io_memory(nvme_mmio_read, nvme_mmio_write,
                         n,  DEVICE_LITTLE_ENDIAN);
 
     /* Register BAR 0 (and bar 1 as it is 64bit). */
     pci_register_bar((struct PCIDevice *)&n->dev,
-        0, msix_bar_size((struct PCIDevice *)&n->dev),
+        0, ((n->dev.cap_present & QEMU_PCI_CAP_MSIX) ?
+        n->dev.msix_bar_size : n->bar0_size),
         (PCI_BASE_ADDRESS_SPACE_MEMORY |
         PCI_BASE_ADDRESS_MEM_TYPE_64),
         nvme_mmio_map);
@@ -740,6 +1108,7 @@ static PCIDeviceInfo nvme_info = {
     .qdev.size = sizeof(NVMEState),
     .qdev.vmsd = &vmstate_nvme,
     .qdev.reset = qdev_nvme_reset,
+    .is_express = 1,
     .init = pci_nvme_init,
     .exit = pci_nvme_uninit,
     .qdev.props = (Property[]) {

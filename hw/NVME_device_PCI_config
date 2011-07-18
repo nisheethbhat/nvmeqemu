@@ -1,0 +1,333 @@
+The Configuration file contains the NVME PCI Express registers which the QEMU uses to 
+initialize the its PCI space.
+The CFG_NAME tag defines a unique value that is constant across a set of registers which 
+fall under the same Category. The NAME tag indicates the name specific to each register.
+OFFSET tag gives a relative offset of this register in its corresponding section. The 
+LENGTH indicates the length in bytes of the resgister defined in PCI space. The VALUE
+of the registers gives you the reset or initial values that the NVME card need to initialize.
+Except in some cases where it gives the offset to next set of capabilities for this NVME.
+
+The reamaining tags indicate a MASK for the registers if it is Read Only, Read Write,
+Read Write Clear or Read write Set.
+
+If the mask is set to 1 indicates it has the corresponding capability. 
+For example if RO_MASK = 0x1 then it indicates that the last bit in that register
+has a capability of read only.
+
+Each line in the file needs to be no more than 255 charachters and the CFG_NAME has a limit 
+of 50 charachters.
+
+The order in which the registers are organized in this file is important as it gives the 
+QEMU read program the next set of registers identification. 
+For example the VALUE = 0x40 in CAP register under CFG_NAME = PCIHEADER section corresponds
+to the relatvie offset of the next CFG_NAME = PMCAP, if CFG_NAME's are in the following order
+in the file.
+PMCAP = 
+MSICAP = 
+MSIXCAP = 
+PXACP = 
+AERCAP = 
+
+Thus there is no need of explicilty writing down the order and the offsets. Just maintain 
+the order according to your needs in the memory and rest is handled by the Qemu parser.
+
+Values to be written can be either 8 bits, 16 bits or 32 bits with the appropriate lengths.
+If you want to write 64 bit values , divide it into two 32 bit values and enter in 
+the config file 
+
+ 
+<REG>
+	CFG_NAME = PCIHEADER
+	NAME = "ID"
+	OFFSET = 0x00
+	LENGTH = 0x04
+	VALUE = 0x01118086
+	RO_MASK = 0xFFFFFFFF
+	RW_MASK = 0x00000000
+	RWC_MASK = 0x00000000
+	RWS_MASK = 0x00000000
+	DESC = "Identifier"
+
+</REG>
+
+<REG>
+	CFG_NAME = PCIHEADER
+	NAME = "CMD"
+	OFFSET = 0x04
+	LENGTH = 0x02
+	VALUE = 0x03
+	RO_MASK = 0xFBF8
+	RW_MASK = 0x0447
+	RWC_MASK = 0x0
+	RWS_MASK = 0x0
+	DESC = "Command Register"
+</REG>
+
+<REG>
+	CFG_NAME = PCIHEADER
+	NAME = "STS"
+	OFFSET = 0x06
+	LENGTH = 0x02
+	VALUE = 0x10
+	RO_MASK = 0x4EFF
+	RW_MASK = 0x0
+	RWC_MASK = 0xB100
+	RWS_MASK = 0x0000
+	DESC = "Device Status"
+</REG>
+
+<REG>
+	CFG_NAME = PCIHEADER
+	NAME = "RID"
+	OFFSET = 0x08
+	LENGTH = 0x01
+	VALUE = 0x1A
+	RO_MASK = 0xFF
+	RW_MASK = 0x00
+	RWC_MASK = 0x00
+	RWS_MASK = 0x00
+	DESC = "Revision ID"
+</REG>
+
+<REG>
+	CFG_NAME = PCIHEADER
+	NAME = "CC"
+	OFFSET = 0x09
+	LENGTH = 0x04
+	VALUE = 0x010802
+	RO_MASK = 0xFFFFFF
+	RW_MASK = 0x0
+	RWC_MASK = 0x0
+	RWS_MASK = 0x0
+	DESC = "Class Code"
+</REG>
+
+<REG>
+	CFG_NAME = PCIHEADER
+	NAME = "CLS"
+	OFFSET = 0x0C
+	LENGTH = 0x01
+	VALUE = 0x0
+	RO_MASK = 0xFF
+	RW_MASK = 0x00 
+	RWC_MASK = 0x00
+	RWS_MASK = 0x00
+ 	DESC = "Cache Line Size"
+</REG>
+
+<REG>
+	CFG_NAME = PCIHEADER
+	NAME = "MLT"
+	OFFSET = 0x0D
+	LENGTH = 0x01
+	VALUE = 0x0
+	RO_MASK = 0xFF
+	RW_MASK = 0x00
+	RWC_MASK = 0x00
+	RWS_MASK = 0x00
+	DESC = "Master Latecy Timer"
+</REG>
+ 
+<REG>
+	CFG_NAME = PCIHEADER
+	NAME = "HTYPE"
+	OFFSET = 0x0E
+	LENGTH = 0x01
+	VALUE = 0x00
+	RO_MASK = 0xFF
+	RW_MASK = 0x00
+	RWC_MASK = 0x00
+	RWS_MASK = 0x00
+	DESC = "Header Type"
+</REG>
+
+<REG>
+	CFG_NAME = PCIHEADER
+	NAME = "BIST"
+	OFFSET = 0x0F
+	LENGTH = 0x1
+	VALUE = 0x00
+	RO_MASK = 0xBF
+	RW_MASK = 0x40
+	RWC_MASK = 0x00
+	RWS_MASK = 0x00
+	DESC = "Built in self test"
+</REG>
+
+<REG>
+	CFG_NAME = PCIHEADER
+	NAME = "MLBAR(BAR0)"
+	OFFSET = 0x10
+	LENGTH = 0x04
+	VALUE = 0x04
+	RO_MASK = 0x0
+	RW_MASK = 0xFFFF7FFF
+	RWC_MASK = 0x0000
+	RWS_MASK = 0x0000
+	DESC = "Memory Register Base address lower 32 bits 0xF2060004"
+</REG>
+
+<REG>
+	CFG_NAME = PCIHEADER
+	NAME = "MUBAR(BAR1)"
+	OFFSET = 0x14
+	LENGTH = 0x04
+	VALUE = 0x0
+	RO_MASK = 0x0
+	RW_MASK = 0xFFFFFFFF
+	RWC_MASK = 0x0
+	RWS_MASK = 0x0
+	DESC = "Memory Register Base address upper 32 bits"
+</REG>
+
+IDBAR Reg has been set to 0x00 instead of 0x01 as described in section 2.1.12
+of NVM Express 1.0a
+<REG>
+	CFG_NAME = PCIHEADER
+	NAME = "IDBAR(BAR2)"
+	OFFSET = 0x18
+	LENGTH = 0x04
+	VALUE = 0x0
+	RO_MASK = 0x7
+	RW_MASK = 0xFFFFFFF8
+	RWC_MASK = 0x0000
+	RWS_MASK = 0x0000
+	DESC = "Index Data pair registers Base address"
+</REG>
+
+<REG>
+	CFG_NAME = PCIHEADER
+	NAME = "BAR3"
+	OFFSET = 0x1C
+	LENGTH = 0x04
+	VALUE = 0x0
+	RO_MASK = 0x0
+	RW_MASK = 0x0
+	RWC_MASK = 0x0
+	RWS_MASK = 0x0
+	DESC = "Reserved"
+</REG>
+
+<REG>
+	CFG_NAME = PCIHEADER
+	NAME = "BAR4"
+	OFFSET = 0x20
+	LENGTH = 0x04
+	VALUE = 0x0
+	RO_MASK = 0x0
+	RW_MASK = 0x0
+	RWC_MASK = 0x0
+	RWS_MASK = 0x0
+	DESC = "Vendor Specific"
+</REG>
+
+<REG>
+	CFG_NAME = PCIHEADER
+	NAME = "BAR5"
+	OFFSET = 0x24
+	LENGTH = 0x04
+	VALUE = 0x0
+	RO_MASK = 0x0
+	RW_MASK = 0x0
+	RWC_MASK = 0x0
+	RWS_MASK = 0x0
+	DESC = "Vendor Specific"
+</REG>
+
+ <REG>
+	CFG_NAME = PCIHEADER
+	NAME = "CCPTR"
+	OFFSET = 0x28
+	LENGTH = 0x04
+	VALUE = 0x0
+	RO_MASK = 0xFF
+	RW_MASK = 0x0
+	RWC_MASK = 0x0
+	RWS_MASK = 0x0
+	DESC = "Card Bus CIS Pointer"
+</REG>
+<REG>
+	CFG_NAME = PCIHEADER
+	NAME = "SS"
+	OFFSET = 0x2C
+	LENGTH = 0x04
+	VALUE = 0x0
+	RO_MASK = 0xFF
+	RW_MASK = 0x0
+	RWC_MASK = 0x0
+	RWS_MASK = 0x0
+	DESC = "Sub System Identfiers"
+</REG>
+<REG>
+	CFG_NAME = PCIHEADER
+	NAME = "EROM"
+	OFFSET = 0x30
+	LENGTH = 0x04
+	VALUE = 0x0
+	RO_MASK = 0x0
+	RW_MASK = 0xFFFFFFFF
+	RWC_MASK = 0x0000
+	RWS_MASK = 0x0000
+	DESC = "Expansion Rom"
+</REG>
+<REG>
+	CFG_NAME = PCIHEADER
+	NAME = "CAP"
+	OFFSET = 0x34
+	LENGTH = 0x01
+	VALUE = 0x46
+	RO_MASK = 0xF
+	RW_MASK = 0x0
+	RWC_MASK = 0x0
+	RWS_MASK = 0x0
+	DESC = "PMCAP Capabilities Pointer"
+</REG>
+<REG>
+	CFG_NAME = PCIHEADER
+	NAME = "INTR"
+	OFFSET = 0x3C
+	LENGTH = 0x02
+	VALUE = 0x0
+	RO_MASK = 0xFF00
+	RW_MASK = 0x00FF
+	RWC_MASK = 0x0000
+	RWS_MASK = 0x0000
+	DESC = "Interrupt Information"
+</REG>
+<REG>
+	CFG_NAME = PCIHEADER
+	NAME = "MGNT"
+	OFFSET = 0x3E
+	LENGTH = 0x01
+	VALUE = 0x0
+	RO_MASK = 0xFF
+	RW_MASK = 0x0
+	RWC_MASK = 0x0
+	RWS_MASK = 0x0
+	DESC = "Minimum Grant"
+</REG>
+<REG>
+	CFG_NAME = PCIHEADER
+	NAME = "MLAT"
+	OFFSET = 0x3F
+	LENGTH = 0x01
+	VALUE = 0x0
+	RO_MASK = 0xFF
+	RW_MASK = 0x00
+	RWC_MASK = 0x0
+	RWS_MASK = 0x0
+	DESC = "Maximum Latency"
+</REG>
+
+<REG>
+	CFG_NAME = PMCAP
+	NAME = "PID"
+	OFFSET = 0x00
+	LENGTH = 0x02
+	VALUE = 0x0001
+	RO_MASK = 0xFFFF
+	RW_MASK = 0x0000
+	RWC_MASK = 0x0000
+	RWS_MASK = 0x0000
+	DESC = "PCI Power Management Capability ID"
+</REG>
