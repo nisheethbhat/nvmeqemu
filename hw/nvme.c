@@ -1035,11 +1035,11 @@ static int pci_nvme_init(PCIDevice *pci_dev)
     n->nvectors = NVME_MSIX_NVECTORS;
     n->bar0_size = NVME_REG_SIZE;
     LOG_NORM("%s(): Reg0 size %u, nvectors: %hu\n", __func__,
-            n->bar0_size, n->nvectors);
+        n->bar0_size, n->nvectors);
 
     /* NVMe is Little Endian. */
     n->mmio_index = cpu_register_io_memory(nvme_mmio_read, nvme_mmio_write,
-                        n,  DEVICE_LITTLE_ENDIAN);
+        n,  DEVICE_LITTLE_ENDIAN);
 
     /* Register BAR 0 (and bar 1 as it is 64bit). */
     pci_register_bar((struct PCIDevice *)&n->dev,
