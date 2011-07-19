@@ -1,41 +1,88 @@
-The Configuration file contains the NVME PCI Express registers which the QEMU uses to 
-initialize the its PCI space.
-The CFG_NAME tag defines a unique value that is constant across a set of registers which 
-fall under the same Category. The NAME tag indicates the name specific to each register.
-OFFSET tag gives a relative offset of this register in its corresponding section. The 
-LENGTH indicates the length in bytes of the resgister defined in PCI space. The VALUE
-of the registers gives you the reset or initial values that the NVME card need to initialize.
-Except in some cases where it gives the offset to next set of capabilities for this NVME.
+Section 1: Config File Info
+The Configuration file contains the NVME PCI Express registers which the QEMU
+uses to initialize its PCI space. The CFG_NAME tag defines a unique value
+that is constant across a set of registers which fall under the same category.
 
-The reamaining tags indicate a MASK for the registers if it is Read Only, Read Write,
-Read Write Clear or Read write Set.
+Following are the CFG_NAME's supported by the parser :
+PCIHEADER : PCI Header Space
+PMCAP     : PCI Power Management Capabilities
+MSICAP    : Message Signaled Interrupt Capability
+MSIXCAP   : MSI-X Capability
+PXACP     : PCI Express Capability
+AERCAP    : Advanced Error Reporting Capability
 
-If the mask is set to 1 indicates it has the corresponding capability. 
-For example if RO_MASK = 0x1 then it indicates that the last bit in that register
-has a capability of read only.
+It should be noted that PCIHEADER should be the first section followed by
+any order of other sections in the file.
 
-Each line in the file needs to be no more than 255 charachters and the CFG_NAME has a limit 
-of 50 charachters.
+The NAME tag indicates the name specific to each register. It should be
+noted that, NAME tag can be any general name and does not have to be unique
+like CFG_NAME.
 
-The order in which the registers are organized in this file is important as it gives the 
-QEMU read program the next set of registers identification. 
-For example the VALUE = 0x40 in CAP register under CFG_NAME = PCIHEADER section corresponds
-to the relatvie offset of the next CFG_NAME = PMCAP, if CFG_NAME's are in the following order
-in the file.
-PMCAP = 
-MSICAP = 
-MSIXCAP = 
-PXACP = 
-AERCAP = 
+The OFFSET tag gives a relative offset of this register in its corresponding
+section defined by CFG_NAME. The parser code uses the above offset for
+storing the values in the PCI space.
 
-Thus there is no need of explicilty writing down the order and the offsets. Just maintain 
-the order according to your needs in the memory and rest is handled by the Qemu parser.
+The LENGTH indicates the length in bytes of the resgister defined in
+PCI space.
 
-Values to be written can be either 8 bits, 16 bits or 32 bits with the appropriate lengths.
-If you want to write 64 bit values , divide it into two 32 bit values and enter in 
-the config file 
+The VALUE tag of the registers is where you set the required values
+that the NVME card needs to get initialized with.in some cases, it gives the
+offset to next set of capabilities for this NVME.
 
- 
+The reamaining tags indicate a MASK for the registers if it is Read Only, Read
+Write, Read Write Clear or Read write Set.If the mask is set to 1 indicates it
+has the corresponding capability. For example if RO_MASK = 0x1 then it
+indicates that the last bit in that register has a capability of read only.
+
+Each line in the file needs to be no more than 255 charachters and the CFG_NAME
+has a limit of 50 charachters.
+
+The order in which the registers are organized in this file is important as it
+gives the QEMU parser program the next set of register's identification/
+category.
+
+For example consider a VALUE = 0x45 in CAP register under CFG_NAME = PCIHEADER
+section.The various register sections are listed as follows in the file from
+top to bottom.
+PMCAP
+MSICAP
+MSIXCAP
+PXCAP
+AERCAP
+
+Since PMCAP just follows the PCIHEADER section in the file, PMCAP will be stored
+in PCI space starting at an offset of 0x45 from the start of PCI space.
+Note that, offset of 0x45 was extracted from VALUE =0x45 of CAP present in
+PCIHEADER section. Likewise all the next pointer fields in capabilities will
+point to the next available capabilities in the file in the top to
+down order. Thus following is the linkage for the above example
+
+PCIHEADER (CAP) --> PMCAP
+PMCAP (NEXT) --> MSICAP
+MSICAP (NEXT) --> MSIXCAP
+MSIXCAP (NEXT) --> PXCAP
+PXCAP (NEXT) --> AERCAP
+
+Thus there is no need of explicilty writing down the order and the specific
+offsets. Just maintain the order according to your needs in the memory and
+write down the relative offsets (OFFSET) for each section (CFG_NAME), rest
+is handled by the Qemu parser.
+
+Values (VALUES) to be written can be either 8 bits, 16 bits or 32 bits with
+the appropriate lengths. If you want to write 64 bit values , divide it
+into two 32 bit values and enter in the config file.
+
+Section 2: Parsing Syntax
+    The Qemu parser, would only look for values under the <REG> and </REG>.
+Thus anything written outside the <REG> and </REG> would be considered as
+invalid values. Thus this is a good place for writing down comments.
+    There are 10 fields inside the <REG> and </REG> header. If some of the
+fields are not applicable to a particular register, then just default it
+to 0x00. If by mistake you forget to list down some of the entries
+between the headers, the parser would take care of it and default it to
+0x00.
+
+
 <REG>
 	CFG_NAME = PCIHEADER
 	NAME = "ID"
@@ -109,7 +156,7 @@ the config file
 	LENGTH = 0x01
 	VALUE = 0x0
 	RO_MASK = 0xFF
-	RW_MASK = 0x00 
+	RW_MASK = 0x00
 	RWC_MASK = 0x00
 	RWS_MASK = 0x00
  	DESC = "Cache Line Size"
@@ -127,7 +174,7 @@ the config file
 	RWS_MASK = 0x00
 	DESC = "Master Latecy Timer"
 </REG>
- 
+
 <REG>
 	CFG_NAME = PCIHEADER
 	NAME = "HTYPE"
