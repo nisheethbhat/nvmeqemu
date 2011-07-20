@@ -31,8 +31,6 @@
 
 /* Flag for NVME threaded support */
 #define NVME_THREADED
-/* Path for PCI address space file */
-#define NVME_DEVICE_PCI_CONFIG_FILE "../hw/NVME_device_PCI_config"
 
 /* Should be in pci class someday. */
 #define PCI_CLASS_STORAGE_EXPRESS 0x010802

@@ -27,12 +27,16 @@ static const VMStateDescription vmstate_nvme = {
 
 /* Mutex for exclusive access to NVMEState */
 pthread_mutex_t nvme_mutex = PTHREAD_MUTEX_INITIALIZER;
+/* Mutex for exclusive access to PCIstate */
+pthread_mutex_t pci_mutex = PTHREAD_MUTEX_INITIALIZER;
+
 /* Variables to set up Scheduling policies for NVME threads */
 pthread_attr_t pthread_attr;
 struct sched_param sch_param;
 /* Maximum number of charachters on a line in any config file */
-#define MAX_CHAR_PER_LINE 100
+#define MAX_CHAR_PER_LINE 250
 
+/* File Level scope functions */
 static void clear_nvme_device(NVMEState *n);
 static void update_var(char* , FILERead *, int*, int *);
 static void update_val(char* , char*);
@@ -40,6 +44,10 @@ static int read_config_file(FILE *, NVMEState *, uint8_t);
 static void pci_space_init(PCIDevice *);
 static void config_space_write(NVMEState *,  FILERead*, uint8_t,
     uint8_t);
+static void nvme_pci_write_config(PCIDevice *, uint32_t, uint32_t, int);
+static uint32_t nvme_pci_read_config(PCIDevice *, uint32_t, int);
+static void read_file_line(FILE *, char *);
+
 
 #ifndef NVME_THREADED
 static void process_reg_writel(NVMEState *n, target_phys_addr_t addr,
@@ -554,6 +562,35 @@ static CPUReadMemoryFunc * const nvme_mmio_read[] = {
     nvme_mmio_readl,
 };
 
+/*********************************************************************
+    Function     :    nvme_pci_write_config
+    Description  :    Function for PCI config space writes
+    Return Type  :    uint32_t : Value read
+    Arguments    :    NVMEState * : Pointer to PCI device state
+                      uint32_t : Address (offset address)
+                      uint32_t : Value to be written
+                      int : Length to be written
+*********************************************************************/
+static void nvme_pci_write_config(PCIDevice *d,
+                                    uint32_t address, uint32_t val, int len)
+{
+    /* NVMEState *n = DO_UPCAST(NVMEState, dev, d); */
+    pci_default_write_config(d, address, val, len);
+}
+
+/*********************************************************************
+    Function     :    nvme_pci_read_config
+    Description  :    Function for PCI config space reads
+    Return Type  :    uint32_t : Value read
+    Arguments    :    PCIDevice * : Pointer to PCI device state
+                      uint32_t : address (offset address)
+                      int : Length to be read
+*********************************************************************/
+static uint32_t nvme_pci_read_config(PCIDevice *d, uint32_t address, int len)
+{
+    return pci_default_read_config(d, address, len);
+}
+
 static void nvme_mmio_map(PCIDevice *pci_dev, int reg_num, pcibus_t addr,
                             pcibus_t size, int type)
 {
@@ -656,10 +693,10 @@ static void config_space_write(NVMEState *n, FILERead* data, uint8_t flag,
 
     if (PCI_SPACE == flag) {
         conf = n->dev.config;
-        wmask = n->dev.wmask;
+        wmask = n->dev.wmask; /* R/W set if 1 else RO*/
         used = n->dev.used;
         cmask = n->dev.cmask;
-        w1cmask = n->dev.w1cmask;
+        w1cmask = n->dev.w1cmask; /* W1C set if 1 */
     } else {
         /* TODO
          * Add the start address of NVME address Space
@@ -996,7 +1033,28 @@ static void pci_space_init(PCIDevice *pci_dev)
     }
 }
 
+/*********************************************************************
+    Function     :    read_file_line
+    Description  :    Reading a single line in a file
+    Return Type  :    void
+    Arguments    :    FILE * : FILE pointer
+                      char * : Pointer to array
+*********************************************************************/
+static void read_file_line(FILE *flp, char *arr)
+{
+    uint32_t char_val; /* Used to read char from file */
+    uint8_t temp_cnt = 0;
 
+    do {
+        char_val = fgetc(flp);
+        if (char_val != '\n' && char_val != '\r') {
+            arr[temp_cnt] = (char)char_val;
+            temp_cnt++;
+        }
+    } while (char_val != '\n' && char_val != '\r');
+
+    arr[temp_cnt++] = '\0';
+}
 
 /* Initialization routine
  *
@@ -1007,15 +1065,38 @@ static int pci_nvme_init(PCIDevice *pci_dev)
 {
     NVMEState *n = DO_UPCAST(NVMEState, dev, pci_dev);
     uint8_t *pci_conf = NULL;
-    uint32_t ret;
-    /* Pointer for Config Files */
-    FILE *config_file ;
-    /* Processor 0        */
+    uint32_t ret, sys_ret;
+    /* Pointer for Config file and temp file */
+    FILE *config_file, *temp_file;
+    /* Processor 0 */
     cpu_set_t  mask;
+    /* Array to store the PATH to the file NVME_DEVICE_PCI_CONFIG_FILE */
+    char file_path[MAX_CHAR_PER_LINE];
 
     pci_conf = n->dev.config;
 
-    config_file = fopen(NVME_DEVICE_PCI_CONFIG_FILE, "r");
+    /* Logic to make the Path to NVME_DEVICE_PCI_CONFIG_FILE dynamic */
+    temp_file = fopen("temp", "w+");
+    sys_ret = system("find / -name 'NVME_device_PCI_config' 2>/dev/null \
+        1>temp");
+
+    if (WIFSIGNALED(sys_ret) &&
+        (WTERMSIG(sys_ret) == SIGINT || WTERMSIG(sys_ret) == SIGQUIT)) {
+        LOG_ERR("Config File path not found on the system\n");
+    } else {
+        /* Custom function written to eliminate /n /r charachters in
+         * fgets output
+         */
+        read_file_line(temp_file, file_path);
+        fclose(temp_file);
+    }
+    /* Deleting the temp file used for noting down the path */
+    sys_ret = system("rm -rf temp");
+    if (sys_ret != 0) {
+        LOG_ERR("Could not delete the temp file\n");
+    }
+
+    config_file = fopen((char *)file_path, "r");
     if (config_file == NULL) {
         LOG_ERR("Could not open the config file\n");
         LOG_NORM("Defaulting the PCI space..\n");
@@ -1109,6 +1190,8 @@ static PCIDeviceInfo nvme_info = {
     .qdev.vmsd = &vmstate_nvme,
     .qdev.reset = qdev_nvme_reset,
     .is_express = 1,
+    .config_write = nvme_pci_write_config,
+    .config_read = nvme_pci_read_config,
     .init = pci_nvme_init,
     .exit = pci_nvme_uninit,
     .qdev.props = (Property[]) {
