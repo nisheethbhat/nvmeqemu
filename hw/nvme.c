@@ -1085,11 +1085,11 @@ static int pci_nvme_init(PCIDevice *pci_dev)
         LOG_ERR("Config File path not found on the system\n");
     } else {
         /* Custom function written to eliminate /n /r charachters in
-         * fgets output
+         * standard fgets output
          */
         read_file_line(temp_file, file_path);
-        fclose(temp_file);
     }
+    fclose(temp_file);
     /* Deleting the temp file used for noting down the path */
     sys_ret = system("rm -rf temp");
     if (sys_ret != 0) {
