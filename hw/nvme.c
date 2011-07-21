@@ -424,6 +424,7 @@ static void nvme_mmio_writel(void *opaque, target_phys_addr_t addr,
     return;
 }
 
+#ifdef NVME_THREADED
 /*********************************************************************
     Function     :    process_reg_readl_thread
     Description  :    Thread for processing Register Reads
@@ -473,7 +474,7 @@ void *process_reg_readl_thread(void *nt)
     pthread_mutex_unlock(&nvme_mutex);
     return NULL;
 }
-
+#endif
 
 /* Read 1 Byte from addr/register */
 static uint32_t nvme_mmio_readb(void *opaque, target_phys_addr_t addr)
@@ -572,10 +573,11 @@ static CPUReadMemoryFunc * const nvme_mmio_read[] = {
                       int : Length to be written
 *********************************************************************/
 static void nvme_pci_write_config(PCIDevice *d,
-                                    uint32_t address, uint32_t val, int len)
+                                    uint32_t addr, uint32_t val, int len)
 {
     /* NVMEState *n = DO_UPCAST(NVMEState, dev, d); */
-    pci_default_write_config(d, address, val, len);
+    /* LOG_NORM("%s(): addr = 0x%08x\n", __func__, (unsigned)addr); */
+    pci_default_write_config(d, addr, val, len);
 }
 
 /*********************************************************************
@@ -586,9 +588,10 @@ static void nvme_pci_write_config(PCIDevice *d,
                       uint32_t : address (offset address)
                       int : Length to be read
 *********************************************************************/
-static uint32_t nvme_pci_read_config(PCIDevice *d, uint32_t address, int len)
+static uint32_t nvme_pci_read_config(PCIDevice *d, uint32_t addr, int len)
 {
-    return pci_default_read_config(d, address, len);
+    /* LOG_NORM("%s(): addr = 0x%08x\n", __func__, (unsigned)addr); */
+    return pci_default_read_config(d, addr, len);
 }
 
 static void nvme_mmio_map(PCIDevice *pci_dev, int reg_num, pcibus_t addr,
