@@ -19,11 +19,12 @@
 
 1. Introduction
 2. How to compile Qemu with NVME support.
-3. How to run Qemu.
-4. How to prepare empty disk image.
-5. How to add files to image file.
-6. I need to add program to image, how to check which libraries are required.
-7. List of files on basic disk image.
+3. Make a virtual HD for QEMU
+4. Locate and download a Linux based 64b OS to virtualize
+5. Install the chosen virtualized OS to the virtual HD
+6. Boot the virtual machine from the virtual HD
+7. Performance notes
+8. Usage Notes
 
 
 Qemu for NVME.
@@ -34,311 +35,52 @@ To get more details about Qemu visit Qemu official website:
 http://wiki.qemu.org/Main_Page
 
 To clone Qemu with support for NVME clone source code from:
-	http://10.237.128.35/aon/?p=qemu.git;a=summary
+http://dcgshare.lm.intel.com/gitweb/?p=nvme/qemu.git;a=summary
 
-
+To clone files with various shell scripts for running the Qemu:
+http://dcgshare.lm.intel.com/gitweb/?p=nvme/manage.git;a=summary
 
 2. How to compile Qemu with NVME support.
-	1. Clone git repository.
-	2. Assume You are using 64 bit environment and 64 bit Linux kernel
-	3. Run configuration script:
-		./configure --target-list=x86_64-softmmu
-	5. To compile type:
-		make
+    1. Clone git repository.
+    2. Assume You are using 64 bit environment and 64 bit Linux kernel
+    3. Execute the shell script nvme/manage/buildqmu.sh
+       If the script fails during the “.configure” operation you may need additional libraries installed. For Ubuntu 10.10 Server 64b the following had to be performed.
+           sudo apt-get install linux-headers-2.6.35-22-server
+           sudo apt-get install zlib1g-dev
+           sudo apt-get install libsdl-dev
+           sudo apt-get install libaio-dev
+    4. The resulting executable is nvme/qemu/x86_64-softmnu/qemu-system-x86_64/qemu-system-x86_64
 
-3. How to run Qemu:
-	1. You will need a kernel image, I use kernel image delivered with Fedora 12.
+3. Make a virtual HD for QEMU
+    1. Execute the shell script nvme/manage/vdiskcreate.sh
+    
+4. Locate and download a Linux based 64b OS to virtualize
+    1. mkdir nvme/manage/vkernel
+    2. Download the iso file into directory nvme/manage/vkernel
 
-	2. Go to directory with compiled Qemu:
-		cd /path/to/qemu/x86_64-softmmu
+5. Install the chosen virtualized OS to the virtual HD
+    1. cd nvme/manage
+    2. ./runqmu.sh <your_virtual_HD_filename> <your_iso_image_filename>
+           A terminal windows should launch into view booting from the supplied ISO file.
+           Follow through the usual actions to install the OS onto the virtual HD.
+           Feel free to partition/format/re-initialize virtual HD as necessary.
+           At the end of a successful installation reboot the virtual machine. The machine won't actually reboot, but it will stop all daemons and execute down to run level 1.
+           At this point simply close the QEMU terminal window.
+ 
+6. Boot the virtual machine from the virtual HD
+    1. cd nvme/manage
+    2. ./runqmu.sh <your_virtual_HD_filename>
 
-	3. Run the following command:
-		./qemu-system-x86_64 -m 512 -kernel /path/to/kenrel/vmlinuz-2.6.31.5 -hda /path/to/200M.img -serial `tty` -append "root=/dev/sda rw init=/init console=ttyS0,115200n8" -k en-us -device nvme
+7. Performance notes
+    1. Consider adding the following switches when invoking configure:
+    --enable-io-thread --enable-linux-aio
+    2. Consider adding the following switches when invoking qemu:
+    --enable-kvm -smp 2
 
-	4. 200M.img is an image file, check this manual how to prepare Your own.
-
-	5. IMPORTANT do not forget about "-device nvme" option. Without this option NVME device emulator will not start under qemu.
-
-	6. You should get a running qemu with console output. Wait for bash command line.
-	7. Now You can perform test on your driver.
-
-4. How to prepare empty disk image.
-	Assume You want 200M image file (200M.img)
-	(For basic testing, without X server 200M is enough)
-
-	1. Prepare empty file with required size.
-		dd if=/dev/zero of=/path/to/file/200M.img bs=1M count=200
-	2. Make file system:
-		mkfs.ext3 /path/to/file/200M.img
-	3. Answer "y" for question/warning:
-		200M.img is not a block special device.
-		Proceed anyway? (y,n) y
-	4. Now You have an empty disk image formatted to ext3 file system.
-
-
-5. How to add files to image file:
-	1. Prepare empty directory for - this will be a mount point for image
-		mkdir	mount_point
-	2. Mount image (200M.img):
-		mount -o loop 200M.img mount_point
-	3. To check if image is mounted type:
-		df -h
-		You should get a similar output:
-		..
-		/dev/sdb1              15G   11G  4.8G  69% /media/4E3E-9E73
-		/dev/loop0            194M  5.6M  179M   4% /root/mount_point
-		..
-
-	4. Now You can copy Linux directories to mounted image
-	5. It is up to You to decide which Linux tools You need for testing.
-		At the end of this document You will find a list of files and
-		dirs which were used for testing nvme reference driver from
-		Intel site:
-		http://www.intel.com/standards/nvmhci/
-
-
-6. I need to add program to image, how to check which libraries are required.
-	1. Adding lspci to image:
-	2. Check which libraries are required by this tool.
-	   (Your results may vary this is output from Ubuntu 10.10)
-		ldd /usr/bin/lspci
-
-		linux-vdso.so.1 =>  (0x00007fff29608000)
-		libpci.so.3 => /usr/lib/libpci.so.3 (0x00007fbd77a5d000)
-		libc.so.6 => /lib/libc.so.6 (0x00007fbd776da000)
-		libz.so.1 => /lib/libz.so.1 (0x00007fbd774c1000)
-		libresolv.so.2 => /lib/libresolv.so.2 (0x00007fbd772a8000)
-		/lib64/ld-linux-x86-64.so.2 (0x00007fbd77c85000)
-
-	3. linux-vdso.so.1 is a virtual library, so don't worry - check google for details.
-	4. Copy remaining libraries to appropriate destinations on your image.
-
-7. List of files on basic disk image:
-
-To run image with files described below, You must create the "init" script in /sbin image directory:
-	#!/bin/bash
-
-	echo starting init script
-	mount /proc
-	mount /sys
-	mknod /dev/console c 5 1
-	ln -s /dev/console /dev/tty
-	mknod /dev/urandom c 1 9
-	mknod /dev/null c 1 3
-	mknod /dev/zero c 1 5
-	mknod /dev/sda b 8 0
-	mknod /dev/sda1 b 8 1
-
-	while true
-	do
-	    /bin/bash
-	done
-
-Directories and files on image:
-
-ls /
-/
-	bin
-	boot
-	dev
-	etc
-	lib
-	lib64 -> lib		<=== this is link
-	mnt
-	proc
-	root
-	sbin
-	sys
-	tmp
-	usr
-
-ls /bin
-	awk
-	basename
-	bash
-	cat
-	chmod
-	chown
-	chroot
-	cp
-	dd
-	df
-	diff
-	dirname
-	dmesg
-	fdisk
-	fsck.ext3
-	grep
-	groupadd
-	groupdel
-	grub
-	gzip
-	halt
-	hexdump
-	hexedit
-	insmod
-	ldd
-	less
-	ln
-	ls
-	lsmod
-	lspci
-	mkdir
-	mkfs.ext3
-	mknod
-	mount
-	mv
-	passwd
-	printf
-	ps
-	reboot
-	rm
-	rmmod
-	sed
-	sh -> bash 		<=== this is link
-	shutdown
-	sleep
-	strace
-	stty
-	su
-	sudo
-	sync
-	tar
-	time
-	touch
-	umount
-	useradd
-	usermod
-	wc
-
-ls /boot
-	this dir is empty
-
-ls /dev
-	this dir is filled by init script
-
-ls /etc
-	fstab
-	mtab
-
-	cat fstab
-	proc            /proc           proc    defaults
-	none    /sys    sysfs   defaults  0       0
-	devpts                  /dev/pts                devpts  gid=5,mode=620  0 0
-
-	cat mtab
-		proc /proc proc rw 0 0
-		none /sys sysfs rw 0 0
-
-
-ls /lib
-	ld-2.11.3.so
-	libaudit.so.1
-	libcrypt.so.1
-	libext2fs.so.2
-	libgobject-2.0.so.0
-	libkrb5.so.3
-	libnsl.so.1
-	libpopt.so.0
-	librt.so.1
-	libtest_aon_verbs_stubs.so
-	libz.so.1
-	ld-linux-x86-64.so.2
-	libblkid.so.1
-	libc.so.6
-	libgcc_s.so.1
-	libgssapi_krb5.so.2
-	libkrb5support.so.0
-	libpam_misc.so.0
-	libproc-3.2.8.so
-	libselinux.so.1
-	libtinfo.so.5
-	libacl.so.1
-	libcap.so.2
-	libdl.so.2
-	libglib-2.0.so.0
-	libk5crypto.so.3
-	libm.so.6
-	libpam.so.0
-	libpthread.so.0
-	libsepol.so.1
-	libutil.so.1
-	libattr.so.1
-	libcom_err.so.2
-	libe2p.so.2
-	libgmodule-2.0.so.0
-	libkeyutils.so.1
-	libncurses.so.5
-	libpcre.so.0
-	libresolv.so.2
-	libstdc++.so.6
-	libuuid.so.1
-
-ls /lib64
-	lib64 is a link to /lib
-
-ls /mnt
-	this dir is empty
-
-ls /proc
-	this dir is empty
-
-ls /root
-	this dir is empty
-
-ls /sbin
-	init
-
-ls /sys
-	this dir is empty
-
-ls /tmp
-	this dir is empty
-
-ls /usr
-	lib64
-	share
-
-
-ls /usr/lib64
-	libcrypto.so.10
-	libfreebl3.so
-	libgpm.so.2
-	liblber-2.4.so.2
-	libldap-2.4.so.2
-	libpci.so
-	libpci.so.3
-	libpci.so.3.1.7
-	libpython2.6.so.1.0
-	libsasl2.so.2
-	libssl.so.10
-	libuser.so.1
-	perl5
-
-ls /usr/lib64/perl5/5.10.0/x86_64-linux-thread-multi/CORE/
-	libperl.so
-
-
-ls usr/share/grub/x86_64-redhat/
-	e2fs_stage1_5
-	fat_stage1_5
-	ffs_stage1_5
-	iso9660_stage1_5
-	jfs_stage1_5
-	minix_stage1_5
-	reiserfs_stage1_5
-	stage1
-	stage2
-	stage2_eltorito
-	ufs2_stage1_5
-	vstafs_stage1_5
-	xfs_stage1_5
-
-
-8. Performance notes
-
-Consider adding the following switches when invoking configure:
---enable-io-thread --enable-linux-aio
-
-Consider adding the following switches when invoking qemu:
---enable-kvm -smp 2
+8. Usage Notes
+    1. Config Files
+           NVME module of Qemu uses two device config files called "NVME_device_PCI_config" and "NVME_device_NVME_config" located inside the /qemu/hw directory.
+           They basically enable the user to set up the intial values in both the PCI and NVME config space.
+           These file names are unique and thus there should not be multiple files with the above names inside the directory and sub-directories from where the qemu is run by executing  
+           ./runqmu.sh <your_virtual_HD_filename>
+           Program should be executed from an higher level directory so that both the config files are available in either the directory itself or its subdirectories.

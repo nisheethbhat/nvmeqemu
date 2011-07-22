@@ -766,9 +766,9 @@ static int read_config_file(FILE *config_file , NVMEState *n, uint8_t flag)
     int eor_flag = 0, sor_flag = 0;
 
     /* Offset used for reads and writes*/
-    uint8_t offset = 0;
+    uint16_t offset = 0;
     /* Recent Capabilities pointer value*/
-    uint8_t link = 0;
+    uint16_t link = 0;
 
     /* Structure to retain values for <REG to </REG> */
     FILERead data;
@@ -825,8 +825,10 @@ static int read_config_file(FILE *config_file , NVMEState *n, uint8_t flag)
 
             } else if (!strcmp(data.cfg_name, "MSICAP")) {
                 if (data.offset == 0) {
-                    /* One time per CFG_NAME */
+                    /* One time initialization per CFG_NAME */
                     offset = link;
+                    n->dev.cap_present = n->dev.cap_present | QEMU_PCI_CAP_MSI;
+                    n->dev.msi_cap = offset;
                 }
                 if (data.offset == 0 && data.len > 1) {
                     link = (uint8_t) data.val >> 8;
@@ -835,11 +837,10 @@ static int read_config_file(FILE *config_file , NVMEState *n, uint8_t flag)
                 }
             } else if (!strcmp(data.cfg_name, "MSIXCAP")) {
                 if (data.offset == 0) {
-                    /* One time per CFG_NAME */
+                    /* One time initialization per CFG_NAME */
                     offset = link;
-                    /*TODO
-                    * Set QEMU_PCI_CAP_MSIX if present
-                    */
+                    n->dev.cap_present = n->dev.cap_present | QEMU_PCI_CAP_MSIX;
+                    n->dev.msix_cap = (uint8_t) offset;
                 }
                 if (data.offset == 0 && data.len > 1) {
                     link = (uint8_t) data.val >> 8;
@@ -848,8 +849,9 @@ static int read_config_file(FILE *config_file , NVMEState *n, uint8_t flag)
                 }
             } else if (!strcmp(data.cfg_name, "PXACP")) {
                 if (data.offset == 0) {
-                    /* One time per CFG_NAME */
+                    /* One time initialization per CFG_NAME */
                     offset = link;
+                    n->dev.cap_present = n->dev.cap_present | QEMU_PCI_CAP_EXPRESS;
                 }
                 if (data.offset == 0 && data.len > 1) {
                     link = (uint8_t) data.val >> 8;
@@ -858,17 +860,12 @@ static int read_config_file(FILE *config_file , NVMEState *n, uint8_t flag)
                 }
             } else if (!strcmp(data.cfg_name, "AERCAP")) {
                 if (data.offset == 0) {
-                    /* One time per CFG_NAME */
-                    offset = link;
+                    /* One time per initialization CFG_NAME */
+                    offset = 0x100;
+                    n->dev.exp.exp_cap = offset;
                 }
                 if (data.offset == 0 && data.len > 3) {
-                    /* AERCAP pointer will take only 8 bits out of 12 bits */
-                    /* TODO
-                     * Extend it to 12 bits but as of now only
-                     * uint8_t pointers are defined for PCI address space
-                     * in Qemu
-                     */
-                    link = (uint8_t) data.val >> 20;
+                    link = (uint16_t) data.val >> 20;
                 } else if (data.offset == 2) {
                     link = (uint8_t) data.val >> 4 ;
                 }
@@ -1054,7 +1051,7 @@ static void read_file_line(FILE *flp, char *arr)
             arr[temp_cnt] = (char)char_val;
             temp_cnt++;
         }
-    } while (char_val != '\n' && char_val != '\r');
+    } while (char_val != '\n' && char_val != '\r' && char_val != EOF);
 
     arr[temp_cnt++] = '\0';
 }
@@ -1071,7 +1068,7 @@ static int pci_nvme_init(PCIDevice *pci_dev)
     uint32_t ret, sys_ret;
     /* Pointer for Config file and temp file */
     FILE *config_file, *temp_file;
-    /* Processor 0 */
+    /* Processor 1 */
     cpu_set_t  mask;
     /* Array to store the PATH to the file NVME_DEVICE_PCI_CONFIG_FILE */
     char file_path[MAX_CHAR_PER_LINE];
@@ -1080,7 +1077,7 @@ static int pci_nvme_init(PCIDevice *pci_dev)
 
     /* Logic to make the Path to NVME_DEVICE_PCI_CONFIG_FILE dynamic */
     temp_file = fopen("temp", "w+");
-    sys_ret = system("find / -name 'NVME_device_PCI_config' 2>/dev/null \
+    sys_ret = system("find -name 'NVME_device_PCI_config' 2>/dev/null \
         1>temp");
 
     if (WIFSIGNALED(sys_ret) &&
