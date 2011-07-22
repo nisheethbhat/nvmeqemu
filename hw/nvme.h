@@ -31,13 +31,13 @@
 
 /* Flag for NVME threaded support */
 #define NVME_THREADED
-
 /* Should be in pci class someday. */
 #define PCI_CLASS_STORAGE_EXPRESS 0x010802
 /* Device ID for NVME Device */
 #define NVME_DEV_ID 0x0111
-/* PMCAP Length */
-#define PMCAP_CAP_LENGTH 5
+/* Maximum number of charachters on a line in any config file */
+#define MAX_CHAR_PER_LINE 250
+
 /* Give 8kB for registers. Should be OK for 512 queues. */
 #define NVME_REG_SIZE (1024 * 8)
 
@@ -765,6 +765,10 @@ int nvme_close_storage_file(NVMEState *n);
 void nvme_dma_mem_read(target_phys_addr_t addr, uint8_t *buf, int len);
 void nvme_dma_mem_write(target_phys_addr_t addr, uint8_t *buf, int len);
 void process_sq(NVMEState *n, uint16_t sq_id);
+
+/* Config file read functions */
+int read_config_file(FILE *, NVMEState *, uint8_t);
+void read_file_line(FILE *, char *);
 
 #ifdef NVME_THREADED
 void *process_doorbell_thread(void *n);

@@ -297,7 +297,7 @@ hw-obj-$(CONFIG_REALLY_VIRTFS) += $(addprefix 9pfs/, $(9pfs-nested-y))
 
 
 #NVMe
-hw-obj-$(CONFIG_NVME) += nvme.o nvme_adm.o nvme_storage.o nvme_io.o
+hw-obj-$(CONFIG_NVME) += nvme.o nvme_adm.o nvme_storage.o nvme_io.o nvme_config_read.o
 
 ######################################################################
 # libdis
