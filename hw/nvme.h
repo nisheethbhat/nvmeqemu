@@ -29,8 +29,6 @@
 #include <pthread.h>
 #include <sched.h>
 
-/* Flag for NVME threaded support */
-#define NVME_THREADED
 /* Should be in pci class someday. */
 #define PCI_CLASS_STORAGE_EXPRESS 0x010802
 /* Device ID for NVME Device */
@@ -38,6 +36,20 @@
 /* Maximum number of charachters on a line in any config file */
 #define MAX_CHAR_PER_LINE 250
 
+/* Length in bytes of registers in PCI space */
+#define PCI_ROM_ADDRESS_LEN 0x04
+#define PCI_BIST_LEN 0x01
+#define PCI_BASE_ADDRESS_2_LEN 0x04
+
+/* Used to create masks */
+/* numbr  : Number of 1's required
+ * offset : Offset from LSB
+ */
+#define MASK(numbr, offset) ((0xffffffff) ^ (0xffffffff << numbr) << offset)
+
+/* The spec requires giving the table structure
+ * a 4K aligned region all by itself. */
+#define MSIX_PAGE_SIZE 0x1000
 /* Give 8kB for registers. Should be OK for 512 queues. */
 #define NVME_REG_SIZE (1024 * 8)
 
@@ -724,20 +736,27 @@ typedef struct NVMEIdentifyNamespace {
 } NVMEIdentifyNamespace;
 
 
-/* Structure for threaded execution            */
+/* Structure for threaded execution for NVME reads/writes */
 typedef struct NVMEThread {
     NVMEState *n ;
-    target_phys_addr_t addr;
     uint32_t val;
     /* Pointer to itself    */
     struct NVMEThread *pt;
+    target_phys_addr_t addr;
 } NVMEThread;
 
-
+/* Structure for threaded execution for PCI reads/writes for NVME device */
+typedef struct PCIThread {
+    PCIDevice *p ;
+    uint32_t val;
+    uint32_t len;
+    /* Pointer to itself    */
+    struct PCIThread *pt;
+    target_phys_addr_t addr;
+} PCIThread;
 
 /* Config File Read Strucutre */
 typedef struct FILERead {
-    char cfg_name[50];
     uint32_t offset;
     uint32_t len;
     uint32_t val;
@@ -745,6 +764,7 @@ typedef struct FILERead {
     uint32_t rw_mask;
     uint32_t rwc_mask;
     uint32_t rws_mask;
+    char cfg_name[50];
 } FILERead;
 
 enum {PCI_SPACE = 0, NVME_SPACE = 1};
@@ -768,12 +788,12 @@ void process_sq(NVMEState *n, uint16_t sq_id);
 
 /* Config file read functions */
 int read_config_file(FILE *, NVMEState *, uint8_t);
-void read_file_line(FILE *, char *);
+int read_file_path(char *arr, uint8_t flag);
 
-#ifdef NVME_THREADED
+/* Declarations for Threaded Functions */
 void *process_doorbell_thread(void *n);
 void *process_reg_writel_thread(void *nt);
 void *process_reg_readl_thread(void *nt);
-#endif
+void *pci_write_config(void *pt);
 
 #endif /* NVME_H_ */

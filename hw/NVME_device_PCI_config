@@ -81,7 +81,9 @@ fields are not applicable to a particular register, then just default it
 to 0x00. If by mistake you forget to list down some of the entries
 between the headers, the parser would take care of it and default it to
 0x00.
-
+    <COMMENT> and </COMMENT> is used if you want the parser to neglect the values.
+Moreover anything written outside <REG> and </REG> block is also ignored by
+the parser
 
 <REG>
 	CFG_NAME = PCIHEADER
@@ -188,6 +190,7 @@ between the headers, the parser would take care of it and default it to
 	DESC = "Header Type"
 </REG>
 
+BIST Reg is not supported in QEMU and thus has been defaulted to 0x00
 <REG>
 	CFG_NAME = PCIHEADER
 	NAME = "BIST"
@@ -228,7 +231,7 @@ between the headers, the parser would take care of it and default it to
 </REG>
 
 IDBAR Reg has been set to 0x00 instead of 0x01 as described in section 2.1.12
-of NVM Express 1.0a
+and 3.2 of NVM Express 1.0a, and thus defaulted to 00 in code
 <REG>
 	CFG_NAME = PCIHEADER
 	NAME = "IDBAR(BAR2)"
@@ -305,6 +308,9 @@ of NVM Express 1.0a
 	RWS_MASK = 0x0
 	DESC = "Sub System Identfiers"
 </REG>
+
+EROM Register is not supported for NVME and thus "EROM" value is ignored and
+defaulted to 0
 <REG>
 	CFG_NAME = PCIHEADER
 	NAME = "EROM"
@@ -371,10 +377,397 @@ of NVM Express 1.0a
 	NAME = "PID"
 	OFFSET = 0x00
 	LENGTH = 0x02
-	VALUE = 0x0001
+	VALUE = 0x6001
 	RO_MASK = 0xFFFF
 	RW_MASK = 0x0000
 	RWC_MASK = 0x0000
 	RWS_MASK = 0x0000
 	DESC = "PCI Power Management Capability ID"
+</REG>
+
+<REG>
+	CFG_NAME = PMCAP
+	NAME = "PC"
+	OFFSET = 0x02
+	LENGTH = 0x02
+	VALUE = 0x0
+	RO_MASK = 0xFFFF
+	RW_MASK = 0x0000
+	RWC_MASK = 0x0000
+	RWS_MASK = 0x0000
+	DESC = "PCI Power Management Capabilities"
+</REG>
+<REG>
+	CFG_NAME = PMCAP
+	NAME = "PMCS"
+	OFFSET = 0x04
+	LENGTH = 0x02
+	VALUE = 0x8
+	RO_MASK = 0xFFFC
+	RW_MASK = 0x3
+	RWC_MASK = 0x0000
+	RWS_MASK = 0x0000
+	DESC = "PCI Power Management Control and Status"
+</REG>
+<REG>
+	CFG_NAME = MSICAP
+	NAME = "MID"
+	OFFSET = 0x00
+	LENGTH = 0x02
+	VALUE = 0x9005
+	RO_MASK = 0xFFFF
+	RW_MASK = 0x0000
+	RWC_MASK = 0x0000
+	RWS_MASK = 0x0000
+	DESC = "Message Signaled Interrupt Identifiers"
+</REG>
+<REG>
+	CFG_NAME = MSICAP
+	NAME = "MC"
+	OFFSET = 0x02
+	LENGTH = 0x02
+	VALUE = 0x80
+	RO_MASK = 0xFF8E
+	RW_MASK = 0x0071
+	RWC_MASK = 0x0000
+	RWS_MASK = 0x0000
+	DESC = "Message Signaled Interrupt Message Control"
+</REG>
+<REG>
+	CFG_NAME = MSICAP
+	NAME = "MA"
+	OFFSET = 0x04
+	LENGTH = 0x04
+	VALUE = 0x0
+	RO_MASK = 0x3
+	RW_MASK = 0xFFFFFFFC
+	RWC_MASK = 0x0000
+	RWS_MASK = 0x0000
+	DESC = "Message Signaled Interrupt Message Address"
+</REG>
+<REG>
+	CFG_NAME = MSICAP
+	NAME = "MUA"
+	OFFSET = 0x08
+	LENGTH = 0x04
+	VALUE = 0x00
+	RO_MASK = 0x0
+	RW_MASK = 0xFFFFFFFF
+	RWC_MASK = 0x0
+	RWS_MASK = 0x0
+	DESC = "Message Signaled Interrupt Upper Address"
+</REG>
+<REG>
+	CFG_NAME = MSICAP
+	NAME = "MD"
+	OFFSET = 0x0C
+	LENGTH = 0x04
+	VALUE = 0x0
+	RO_MASK = 0x0
+	RW_MASK = 0xFFFFFFFF
+	RWC_MASK = 0x0
+	RWS_MASK = 0x0
+	DESC = "Message Signaled Interrupt Message Data"
+</REG>
+<REG>
+	CFG_NAME = MSICAP
+	NAME = "MMASK"
+	OFFSET = 0x10
+	LENGTH = 0x04
+	VALUE = 0x0
+	RO_MASK = 0x0
+	RW_MASK = 0xFFFFFFFF
+	RWC_MASK = 0x0000
+	RWS_MASK = 0x0000
+	DESC = "Message Signaled Interrupt Mask Bits"
+</REG>
+<REG>
+	CFG_NAME = MSICAP
+	NAME = "MPEND"
+	OFFSET = 0x14
+	LENGTH = 0x04
+	VALUE = 0x0
+	RO_MASK = 0x0
+	RW_MASK = 0xFFFFFFFF
+	RWC_MASK = 0x0
+	RWS_MASK = 0x0
+	DESC = "Message Signaled Interrupt Pending Bits"
+</REG>
+
+<REG>
+	CFG_NAME = MSIXCAP
+	NAME = "MXID"
+	OFFSET = 0x0
+	LENGTH = 0x02
+	VALUE = 0x9711
+	RO_MASK = 0xFFFF
+	RW_MASK = 0x0
+	RWC_MASK = 0x0
+	RWS_MASK = 0x0
+	DESC = "MSI-X Identifiers"
+</REG>
+<REG>
+	CFG_NAME = MSIXCAP
+	NAME = "MXC"
+	OFFSET = 0x02
+	LENGTH = 0x02
+	VALUE = 0x01
+	RO_MASK = 0x3FFF
+	RW_MASK = 0xC000
+	RWC_MASK = 0x0
+	RWS_MASK = 0x0
+	DESC = "MSI-X Message Control"
+</REG>
+<REG>
+	CFG_NAME = MSIXCAP
+	NAME = "MTAB"
+	OFFSET = 0x04
+	LENGTH = 0x04
+	VALUE = 0x0
+	RO_MASK = 0xFFFFFFFF
+	RW_MASK = 0x0
+	RWC_MASK = 0x0
+	RWS_MASK = 0x0
+	DESC = "MSI-X Table Offset"
+</REG>
+<REG>
+	CFG_NAME = MSIXCAP
+	NAME = "MPBA"
+	OFFSET = 0x08
+	LENGTH = 0x04
+	VALUE = 0x0
+	RO_MASK = 0xFFFFFFFF
+	RW_MASK = 0x0
+	RWC_MASK = 0x0
+	RWS_MASK = 0x0
+	DESC = "MSI-X PBA Offset"
+</REG>
+<REG>
+	CFG_NAME = PXCAP
+	NAME = "PXID"
+	OFFSET = 0x00
+	LENGTH = 0x02
+	VALUE = 0xaa10
+	RO_MASK = 0xFFFF
+	RW_MASK = 0x0
+	RWC_MASK = 0x0
+	RWS_MASK = 0x0
+	DESC = "PCI Express Capability ID"
+</REG>
+<REG>
+	CFG_NAME = PXCAP
+	NAME = "PXCAP"
+	OFFSET = 0x02
+	LENGTH = 0x02
+	VALUE = 0x2
+	RO_MASK = 0xFFFF
+	RW_MASK = 0x0
+	RWC_MASK = 0x0
+	RWS_MASK = 0x0
+	DESC = "PCI Express Capabilities"
+</REG>
+<REG>
+	CFG_NAME = PXCAP
+	NAME = "PXDCAP"
+	OFFSET = 0x04
+	LENGTH = 0x04
+	VALUE = 0x8000
+	RO_MASK = 0xFFFFFFFF
+	RW_MASK = 0x0
+	RWC_MASK = 0x0
+	RWS_MASK = 0x0
+	DESC = "PCI Express Device Capabilities"
+</REG>
+<REG>
+	CFG_NAME = PXCAP
+	NAME = "PXDC"
+	OFFSET = 0x08
+	LENGTH = 0x02
+	VALUE = 0x0
+	RO_MASK = 0x7FE0
+	RW_MASK = 0xFFFF
+	RWC_MASK = 0x0000
+	RWS_MASK = 0x0000
+	DESC = "PCI Express Device Control"
+</REG>
+<REG>
+	CFG_NAME = PXCAP
+	NAME = "PXDS"
+	OFFSET = 0x0A
+	LENGTH = 0x02
+	VALUE = 0x0
+	RO_MASK = 0xFFF0
+	RW_MASK = 0x0
+	RWC_MASK = 0xF
+	RWS_MASK = 0x0
+	DESC = "PCI Express Device Status"
+</REG>
+<REG>
+	CFG_NAME = PXCAP
+	NAME = "PXLCAP"
+	OFFSET = 0x0C
+	LENGTH = 0x04
+	VALUE = 0x0
+	RO_MASK = 0xFFFFFFFF
+	RW_MASK = 0x0
+	RWC_MASK = 0x0
+	RWS_MASK = 0x0
+	DESC = "PCI Express Link Capabilities"
+</REG>
+<REG>
+	CFG_NAME = PXCAP
+	NAME = "PXLC"
+	OFFSET = 0x10
+	LENGTH = 0x02
+	VALUE = 0x0
+	RO_MASK = 0xFE34
+	RW_MASK = 0x3CB
+	RWC_MASK = 0x0
+	RWS_MASK = 0x0
+	DESC = "PCI Express Link Control"
+</REG>
+<REG>
+	CFG_NAME = PXCAP
+	NAME = "PXLS"
+	OFFSET = 0x12
+	LENGTH = 0x02
+	VALUE = 0x0001
+	RO_MASK = 0xFFFF
+	RW_MASK = 0x0
+	RWC_MASK = 0x0
+	RWS_MASK = 0x0
+	DESC = "PCI Express Link Status"
+</REG>
+<REG>
+	CFG_NAME = PXCAP
+	NAME = "PXDCAP2"
+	OFFSET = 0x24
+	LENGTH = 0x04
+	VALUE = 0x10
+	RO_MASK = 0xFFFFFFFF
+	RW_MASK = 0x0000
+	RWC_MASK = 0x0000
+	RWS_MASK = 0x0000
+	DESC = "PCI Express Device Capabilities 2"
+</REG>
+<REG>
+	CFG_NAME = PXCAP
+	NAME = "PXDC2"
+	OFFSET = 0x28
+	LENGTH = 0x04
+	VALUE = 0x0
+	RO_MASK = 0xFFFF9BEF
+	RW_MASK = 0x6410
+	RWC_MASK = 0x0
+	RWS_MASK = 0x0
+	DESC = "PCI Express Device Control 2"
+</REG>
+
+<REG>
+	CFG_NAME = AERCAP
+	NAME = "AERID"
+	OFFSET = 0x00
+	LENGTH = 0x04
+	VALUE = 0x20001
+	RO_MASK = 0xFFFFFFFF
+	RW_MASK = 0x0
+	RWC_MASK = 0x0
+	RWS_MASK = 0x0
+	DESC = "AER Capability ID"
+</REG>
+<REG>
+	CFG_NAME = AERCAP
+	NAME = "AERUCES"
+	OFFSET = 0x04
+	LENGTH = 0x04
+	VALUE = 0x0
+	RO_MASK = 0xFFEAAFEF
+	RW_MASK = 0x0
+	RWC_MASK = 0x3FFF010
+	RWS_MASK = 0x0000
+	DESC = "AER Uncorrectable Error Status Register"
+</REG>
+<REG>
+	CFG_NAME = AERCAP
+	NAME = "AERUCEM"
+	OFFSET = 0x08
+	LENGTH = 0x04
+	VALUE = 0x400000
+	RO_MASK = 0xFFEAAFEF
+	RW_MASK = 0x3FFF010
+	RWC_MASK = 0x0
+	RWS_MASK = 0x0
+	DESC = "AER Uncorrectable Error Mask Register"
+</REG>
+<REG>
+	CFG_NAME = AERCAP
+	NAME = "AERUCESEV"
+	OFFSET = 0x0C
+	LENGTH = 0x04
+	VALUE = 0x462010
+	RO_MASK = 0xFFEAAFEF
+	RW_MASK = 0x3FFF010
+	RWC_MASK = 0x0
+	RWS_MASK = 0x0
+	DESC = "AER Uncorrectable Error Severity Register"
+</REG>
+<REG>
+	CFG_NAME = AERCAP
+	NAME = "AERCS"
+	OFFSET = 0x10
+	LENGTH = 0x04
+	VALUE = 0x0
+	RO_MASK = 0xFFFFCE3E
+	RW_MASK = 0x0
+	RWC_MASK = 0xF1C1
+	RWS_MASK = 0x0
+	DESC = "AER Correctable Error Status Register"
+</REG>
+<REG>
+	CFG_NAME = AERCAP
+	NAME = "AERCEM"
+	OFFSET = 0x14
+	LENGTH = 0x04
+	VALUE = 0x0
+	RO_MASK = 0xFFFFCE3E
+	RW_MASK = 0xF1C1
+	RWC_MASK = 0x0
+	RWS_MASK = 0x0
+	DESC = "AER Correctable Error Mask Register"
+</REG>
+<REG>
+	CFG_NAME = AERCAP
+	NAME = "AERCC"
+	OFFSET = 0x18
+	LENGTH = 0x04
+	VALUE = 0x0
+	RO_MASK = 0xFFFFFFFF
+	RW_MASK = 0x740
+	RWC_MASK = 0x0
+	RWS_MASK = 0x0
+	DESC = "AER Capabilities and Control Register"
+</REG>
+<REG>
+	CFG_NAME = AERCAP
+	NAME = "AERHL"
+	OFFSET = 0x1C
+	LENGTH = 0x02
+	VALUE = 0x0
+	RO_MASK = 0xFFFF
+	RW_MASK = 0x0
+	RWC_MASK = 0x0
+	RWS_MASK = 0x0
+	DESC = "AER Header Log Register"
+</REG>
+<REG>
+	CFG_NAME = AERCAP
+	NAME = "AERTLP"
+	OFFSET = 0x38
+	LENGTH = 0x02
+	VALUE = 0x0
+	RO_MASK = 0xFFFF
+	RW_MASK = 0x0000
+	RWC_MASK = 0x0000
+	RWS_MASK = 0x0000
+	DESC = "AER TLP Prefix Log Register"
 </REG>

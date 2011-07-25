@@ -29,7 +29,8 @@
 static void update_var(char* , FILERead *, int*, int *);
 static void update_val(char* , char*);
 static void config_space_write(NVMEState *,  FILERead*, uint8_t,
-    uint8_t);
+    uint16_t);
+static void read_file_line(FILE *, char *);
 
 /*********************************************************************
     Function     :    read_config_file
@@ -52,7 +53,10 @@ int read_config_file(FILE *config_file , NVMEState *n, uint8_t flag)
     uint16_t offset = 0;
     /* Recent Capabilities pointer value*/
     uint16_t link = 0;
-
+    /* Temporary variable for bit masking */
+    uint32_t temp_mask = 0;
+    /* New Size of BAR0 */
+    uint32_t new_size_bar0 = 0 ;
     /* Structure to retain values for <REG to </REG> */
     FILERead data;
 
@@ -101,7 +105,7 @@ int read_config_file(FILE *config_file , NVMEState *n, uint8_t flag)
                     offset = link;
                 }
                 if (data.offset == 0 && data.len > 1) {
-                    link = (uint8_t) data.val >> 8;
+                    link = (uint8_t) (data.val >> 8);
                 } else if (data.offset == 1) {
                     link = (uint8_t) data.val ;
                 }
@@ -113,8 +117,9 @@ int read_config_file(FILE *config_file , NVMEState *n, uint8_t flag)
                     n->dev.cap_present = n->dev.cap_present | QEMU_PCI_CAP_MSI;
                     n->dev.msi_cap = offset;
                 }
+
                 if (data.offset == 0 && data.len > 1) {
-                    link = (uint8_t) data.val >> 8;
+                    link = (uint8_t) (data.val >> 8);
                 } else if (data.offset == 1) {
                     link = (uint8_t) data.val ;
                 }
@@ -124,13 +129,46 @@ int read_config_file(FILE *config_file , NVMEState *n, uint8_t flag)
                     offset = link;
                     n->dev.cap_present = n->dev.cap_present | QEMU_PCI_CAP_MSIX;
                     n->dev.msix_cap = (uint8_t) offset;
+
+                    /* Add space for MSI-X structures */
+                    if (!n->bar0_size) {
+                        new_size_bar0 = MSIX_PAGE_SIZE;
+                    } else if (n->bar0_size < MSIX_PAGE_SIZE) {
+                        new_size_bar0 = MSIX_PAGE_SIZE;
+                        new_size_bar0 = MSIX_PAGE_SIZE * 2;
+                    } else {
+                        new_size_bar0 = n->bar0_size * 2;
+                    }
+                    n->dev.msix_bar_size = new_size_bar0;
+                } else if (data.offset == 2) {
+                    /* Initializing the MSI-X Cap */
+                    temp_mask = data.val & MASK(11, 0);
+                    if (temp_mask == 0) {
+                        LOG_ERR("Wrong entry for Table Size inside MXC in\
+                            Config File");
+                        LOG_ERR("Deafulting the value to 1");
+                        n->nvectors = 0;
+                    } else {
+                        n->nvectors = (temp_mask - 1);
+                    }
+                } else if (data.offset == 4) {
+                    /* TODO:
+                     * Add support for linking BAR's to Table BIR
+                     * depending upon MTAB
+                     */
+                } else if (data.offset == 8) {
+                    /* TODO:
+                     * Add support for linking BAR's to PBA BIR
+                     * depending upon MPBA
+                     */
                 }
+
                 if (data.offset == 0 && data.len > 1) {
-                    link = (uint8_t) data.val >> 8;
+                    link = (uint8_t) (data.val >> 8);
                 } else if (data.offset == 1) {
                     link = (uint8_t) data.val ;
                 }
-            } else if (!strcmp(data.cfg_name, "PXACP")) {
+            } else if (!strcmp(data.cfg_name, "PXCAP")) {
                 if (data.offset == 0) {
                     /* One time initialization per CFG_NAME */
                     offset = link;
@@ -138,7 +176,7 @@ int read_config_file(FILE *config_file , NVMEState *n, uint8_t flag)
                         QEMU_PCI_CAP_EXPRESS;
                 }
                 if (data.offset == 0 && data.len > 1) {
-                    link = (uint8_t) data.val >> 8;
+                    link = (uint8_t) (data.val >> 8);
                 } else if (data.offset == 1) {
                     link = (uint8_t) data.val ;
                 }
@@ -146,12 +184,15 @@ int read_config_file(FILE *config_file , NVMEState *n, uint8_t flag)
                 if (data.offset == 0) {
                     /* One time per initialization CFG_NAME */
                     offset = 0x100;
+                    /* exp_cap is 8 bits only in Qemu PCI code.
+                     * It should be 12 bits
+                     */
                     n->dev.exp.exp_cap = offset;
                 }
                 if (data.offset == 0 && data.len > 3) {
-                    link = (uint16_t) data.val >> 20;
+                    link = (uint16_t) (data.val >> 20);
                 } else if (data.offset == 2) {
-                    link = (uint8_t) data.val >> 4 ;
+                    link = (uint8_t) (data.val >> 4);
                 }
             }
 
@@ -184,13 +225,84 @@ int read_config_file(FILE *config_file , NVMEState *n, uint8_t flag)
 }
 
 /*********************************************************************
+    Function     :    read_file_path
+    Description  :    Finding the path to the config file in
+                      the system
+    Return Type  :    int (0 : Success , 1 : Error)
+    Arguments    :    char * : Points the array through which file
+                               path is returned
+                      uint8_t : Flag for type of config space
+                              : 0 = PCI Config Space
+                              : 1 = NVME Config Space
+*********************************************************************/
+int read_file_path(char *arr, uint8_t flag)
+{
+    FILE *temp_file;
+    int sys_ret;
+    time_t tm; /* Time used as dynamic file name */
+    char *rnd; /* Points to the static buffer returned by asctime() */
+    char cmd_arr[100]; /* Temp array to build the command */
+
+    /* Creating dynamic file name */
+    tm = time(NULL);
+    rnd = asctime(localtime(&tm));
+
+    if (flag == PCI_SPACE) {
+        strcpy((char *)cmd_arr, "find -name 'NVME_device_PCI_config' 2>/dev/"
+            "null 1>'");
+        strcat((char *)cmd_arr, rnd);
+        strcat((char *)cmd_arr, "'");
+        LOG_NORM("Find command : %s", cmd_arr);
+    } else if (flag == NVME_SPACE) {
+        strcpy((char *)cmd_arr, "find -name 'NVME_device_NVME_config' 2>/dev/"
+            "null 1>'");
+        strcat((char *)cmd_arr, rnd);
+        strcat((char *)cmd_arr, "'");
+    }
+
+    /* Logic to make the Path to config files dynamic */
+    temp_file = fopen(rnd, "w+");
+    if (temp_file == NULL) {
+            LOG_ERR("Could not open the temporary file");
+            return 0;
+    } else {
+        sys_ret = system(cmd_arr);
+        if (WIFSIGNALED(sys_ret) &&
+            (WTERMSIG(sys_ret) == SIGINT || WTERMSIG(sys_ret) == SIGQUIT)) {
+            LOG_ERR("Config File path not found on the system");
+        } else {
+            /* Custom function written to eliminate /n /r charachters in
+            * standard fgets output
+            */
+            read_file_line(temp_file, arr);
+        }
+        fclose(temp_file);
+
+        /* Deleting the temp file used for noting down the path */
+
+        bzero(cmd_arr, 100 * sizeof(char));
+        strcpy((char *)cmd_arr, "rm -rf '");
+        strcat((char *)cmd_arr, rnd);
+        strcat((char *)cmd_arr, "'");
+        LOG_NORM("Remove command : %s", cmd_arr);
+        sys_ret = system(cmd_arr);
+
+        if (sys_ret != 0) {
+            LOG_ERR("Could not delete the temp file");
+        }
+        return 1;
+    }
+}
+
+
+/*********************************************************************
     Function     :    read_file_line
     Description  :    Reading a single line in a file
     Return Type  :    void
     Arguments    :    FILE * : FILE pointer
                       char * : Pointer to array
 *********************************************************************/
-void read_file_line(FILE *flp, char *arr)
+static void read_file_line(FILE *flp, char *arr)
 {
     uint32_t char_val; /* Used to read char from file */
     uint8_t temp_cnt = 0;
@@ -205,6 +317,7 @@ void read_file_line(FILE *flp, char *arr)
 
     arr[temp_cnt++] = '\0';
 }
+
 
 /*********************************************************************
     Function     :    update_var
@@ -262,10 +375,10 @@ static void update_var(char *ptr , FILERead *data, int *eor, int *sor)
         data->rw_mask = (uint32_t) strtol(val, NULL, 16) ;
     } else if (!strcmp(tags, "RWC_MASK")) {
         update_val(++ptr, val);
-        data->rw_mask = (uint32_t) strtol(val, NULL, 16) ;
+        data->rwc_mask = (uint32_t) strtol(val, NULL, 16) ;
     } else if (!strcmp(tags, "RWS_MASK")) {
         update_val(++ptr, val);
-        data->rw_mask = (uint32_t) strtol(val, NULL, 16) ;
+        data->rws_mask = (uint32_t) strtol(val, NULL, 16) ;
     } else if (!strcmp(tags, "CFG_NAME")) {
         update_val(++ptr, val);
         strcpy(data->cfg_name, val);
@@ -306,10 +419,10 @@ static void update_val(char *ptr, char *val)
                       uint8_t : Flag for type of config space
                               : 0 = PCI Config Space
                               : 1 = NVME Config Space
-                      uint8_t : Dynamic offset ex:CAP pointer
+                      uint16_t : Dynamic offset ex:CAP pointer
 *********************************************************************/
 static void config_space_write(NVMEState *n, FILERead* data, uint8_t flag,
-    uint8_t offset)
+    uint16_t offset)
 {
     /* Pointer to config  space */
     uint8_t *conf = NULL;
