@@ -161,7 +161,7 @@ the parser
 	RW_MASK = 0x00
 	RWC_MASK = 0x00
 	RWS_MASK = 0x00
- 	DESC = "Cache Line Size"
+    DESC = "Cache Line Size"
 </REG>
 
 <REG>
