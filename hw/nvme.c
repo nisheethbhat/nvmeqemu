@@ -73,8 +73,11 @@ static void process_doorbell(NVMEState *nvme_dev, target_phys_addr_t addr,
             return;
         }
         nvme_dev->sq[queue_id].tail = val & 0xffff;
-        /* TODO Processing all the messages for that particular queue */
-        process_sq(nvme_dev, queue_id);
+        /* Processing all the messages for that particular queue */
+        do {
+            process_sq(nvme_dev, queue_id);
+        } while (nvme_dev->sq[queue_id].head != nvme_dev->sq[queue_id].tail);
+
     }
     return;
 }
