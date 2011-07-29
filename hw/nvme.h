@@ -35,7 +35,8 @@
 #define NVME_DEV_ID 0x0111
 /* Maximum number of charachters on a line in any config file */
 #define MAX_CHAR_PER_LINE 250
-
+/* Width of SQ/CQ base address in bytes*/
+#define QUEUE_BASE_ADDRESS_WIDTH 8
 /* Length in bytes of registers in PCI space */
 #define PCI_ROM_ADDRESS_LEN 0x04
 #define PCI_BIST_LEN 0x01
@@ -735,26 +736,6 @@ typedef struct NVMEIdentifyNamespace {
     uint8_t vs[3712];    /* [384-4095] Vendor Specific */
 } NVMEIdentifyNamespace;
 
-
-/* Structure for threaded execution for NVME reads/writes */
-typedef struct NVMEThread {
-    NVMEState *n ;
-    uint32_t val;
-    /* Pointer to itself    */
-    struct NVMEThread *pt;
-    target_phys_addr_t addr;
-} NVMEThread;
-
-/* Structure for threaded execution for PCI reads/writes for NVME device */
-typedef struct PCIThread {
-    PCIDevice *p ;
-    uint32_t val;
-    uint32_t len;
-    /* Pointer to itself    */
-    struct PCIThread *pt;
-    target_phys_addr_t addr;
-} PCIThread;
-
 /* Config File Read Strucutre */
 typedef struct FILERead {
     uint32_t offset;
@@ -789,11 +770,5 @@ void process_sq(NVMEState *n, uint16_t sq_id);
 /* Config file read functions */
 int read_config_file(FILE *, NVMEState *, uint8_t);
 int read_file_path(char *arr, uint8_t flag);
-
-/* Declarations for Threaded Functions */
-void *process_doorbell_thread(void *n);
-void *process_reg_writel_thread(void *nt);
-void *process_reg_readl_thread(void *nt);
-void *pci_write_config(void *pt);
 
 #endif /* NVME_H_ */
