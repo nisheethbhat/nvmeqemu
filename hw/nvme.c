@@ -176,7 +176,6 @@ static void nvme_mmio_writel(void *opaque, target_phys_addr_t addr,
                     (uint64_t)((uint64_t)val << 32);
             break;
         default:
-            /* ERROR */
             break;
         }
     } else if (addr >= NVME_SQ0TDBL && addr <= NVME_CQMAXHDBL) {
@@ -322,8 +321,7 @@ static void nvme_pci_write_config(PCIDevice *pci_dev,
 *********************************************************************/
 static uint32_t nvme_pci_read_config(PCIDevice *pci_dev, uint32_t addr, int len)
 {
-    uint32_t val = 0;
-
+    uint32_t val;
     LOG_DBG("%s(): addr = 0x%08x\n", __func__, (unsigned)addr);
     val = pci_default_read_config(pci_dev, addr, len);
     return val;
