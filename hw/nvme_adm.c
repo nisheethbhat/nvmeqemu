@@ -262,7 +262,7 @@ static uint32_t adm_cmd_alloc_sq(NVMEState *n, NVMECmd *cmd, NVMECQE *cqe)
     }
 
     /* Queue Size */
-    if (c->qsize > n->ctrlcap.mqes) {
+    if (c->qsize > n->ctrlcap->mqes) {
         sf->sct = NVME_SCT_CMD_SPEC_ERR;
         sf->sc = NVME_MAX_QUEUE_SIZE_EXCEEDED;
         return FAIL;
@@ -413,9 +413,9 @@ static uint32_t adm_cmd_alloc_cq(NVMEState *n, NVMECmd *cmd, NVMECQE *cqe)
     }
 
     /* Queue Size */
-    if (c->qsize > n->ctrlcap.mqes) {
+    if (c->qsize > n->ctrlcap->mqes) {
         LOG_NORM("c->qsize %d, n->ctrlcap.mqes %d\n",
-            c->qsize, n->ctrlcap.mqes);
+            c->qsize, n->ctrlcap->mqes);
         sf->sct = NVME_SCT_CMD_SPEC_ERR;
         sf->sc = NVME_MAX_QUEUE_SIZE_EXCEEDED;
         return FAIL;

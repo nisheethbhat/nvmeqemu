@@ -34,6 +34,8 @@ static uint32_t nvme_pci_read_config(PCIDevice *, uint32_t, int);
 static inline uint8_t range_covers_reg(uint64_t, uint64_t, uint64_t,
     uint64_t);
 static void process_doorbell(NVMEState *, target_phys_addr_t, uint32_t);
+static void read_file(NVMEState *, uint8_t);
+
 
 /*********************************************************************
     Function     :    process_doorbell
@@ -150,7 +152,7 @@ static void nvme_mmio_writel(void *opaque, target_phys_addr_t addr,
                 if (nvme_dev->cq[ACQ_ID].dma_addr &&
                     nvme_dev->sq[ASQ_ID].dma_addr &&
                     (!nvme_open_storage_file(nvme_dev))) {
-                    nvme_dev->cstatus.rdy = 1;
+                    nvme_dev->cstatus->rdy = 1;
                     nvme_dev->cq[ACQ_ID].phase_tag = 1;
                 }
             } else {
@@ -179,6 +181,10 @@ static void nvme_mmio_writel(void *opaque, target_phys_addr_t addr,
             break;
         }
     } else if (addr >= NVME_SQ0TDBL && addr <= NVME_CQMAXHDBL) {
+        /* TODO hardcoding doorbell register write masks since it's
+         * never read from config file
+         */
+
         /* Process the Doorbell Writes */
         process_doorbell(nvme_dev, addr, val);
     }
@@ -186,18 +192,80 @@ static void nvme_mmio_writel(void *opaque, target_phys_addr_t addr,
 }
 
 /*********************************************************************
+    Function     :    nvme_cntrl_write_config
+    Description  :    Function for NVME Controller space writes
+                      (except doorbell reads)
+    Return Type  :    void
+    Arguments    :    NVMEState * : Pointer to NVME device State
+                      target_phys_addr_t : address (offset address)
+                      uint32_t : Value to write
+                      uint8_t : Length to be read
+*********************************************************************/
+void nvme_cntrl_write_config(NVMEState *nvme_dev,
+    target_phys_addr_t addr, uint32_t val, uint8_t len)
+{
+    uint8_t index;
+    for (index = 0; index < len && addr + index < NVME_CNTRL_SIZE;
+        val >>= 8, index++) {
+        /* Settign up RW and RO mask and making reserved bits non writable */
+        nvme_dev->cntrl_reg[addr + index] = (nvme_dev->cntrl_reg[addr + index]
+            & (~(nvme_dev->rw_mask[addr + index])
+                | ~(nvme_dev->used_mask[addr + index])))
+                    | (val & nvme_dev->rw_mask[addr + index]);
+        /* W1C: Write 1 to Clear */
+        nvme_dev->cntrl_reg[addr + index] &=
+            ~(val & nvme_dev->rwc_mask[addr + index]);
+        /* W1S: Write 1 to Set */
+        nvme_dev->cntrl_reg[addr + index] |=
+            (val & nvme_dev->rws_mask[addr + index]);
+    }
+}
+
+/*********************************************************************
+    Function     :    nvme_cntrl_read_config
+    Description  :    Function for NVME Controller space reads
+                      (except doorbell reads)
+    Return Type  :    uint32_t : Value read
+    Arguments    :    NVMEState * : Pointer to NVME device State
+                      target_phys_addr_t : address (offset address)
+                      uint8_t : Length to be read
+*********************************************************************/
+uint32_t nvme_cntrl_read_config(NVMEState *nvme_dev,
+    target_phys_addr_t addr, uint8_t len)
+{
+    uint32_t val;
+    /* Prints the assertion and aborts */
+    assert(len == 1 || len == 2 || len == 4);
+    len = MIN(len, NVME_CNTRL_SIZE - addr);
+    memcpy(&val, nvme_dev->cntrl_reg + addr, len);
+    return le32_to_cpu(val);
+}
+/*********************************************************************
     Function     :    nvme_mmio_readb
     Description  :    Read 1 Bytes at addr/register
     Return Type  :    void
     Arguments    :    void * : Pointer to NVME device State
                       target_phys_addr_t : Address (offset address)
+    Note:- Even though function is readb, return value is uint32_t
+    coz, Qemu mapping code does the masking of repective bits
 *********************************************************************/
 static uint32_t nvme_mmio_readb(void *opaque, target_phys_addr_t addr)
 {
-    NVMEState *n = opaque;
+    uint8_t rd_val;
+    NVMEState *nvme_dev = (NVMEState *) opaque;
     LOG_DBG("%s(): addr = 0x%08x\n", __func__, (unsigned)addr);
-    (void)n;
-    return 0;
+    /* Check if NVME controller Capabilities was written */
+    if (addr < NVME_SQ0TDBL) {
+        rd_val = nvme_cntrl_read_config(nvme_dev, addr, (uint8_t)MASK(1, 0));
+    } else if (addr >= NVME_SQ0TDBL && addr <= NVME_CQMAXHDBL) {
+        LOG_NORM("Undefined operation of reading the doorbell registers");
+        rd_val = 0;
+    } else {
+        LOG_ERR("Undefined address read");
+        LOG_ERR("Qemu supports only 64 queues");
+        rd_val = 0 ;
+    }
+    return rd_val;
 }
 
 /*********************************************************************
@@ -206,13 +274,27 @@ static uint32_t nvme_mmio_readb(void *opaque, target_phys_addr_t addr)
     Return Type  :    void
     Arguments    :    void * : Pointer to NVME device State
                       target_phys_addr_t : Address (offset address)
+    Note:- Even though function is readw, return value is uint32_t
+    coz, Qemu mapping code does the masking of repective bits
 *********************************************************************/
 static uint32_t nvme_mmio_readw(void *opaque, target_phys_addr_t addr)
 {
-    NVMEState *n = opaque;
+    uint32_t rd_val;
+    NVMEState *nvme_dev = (NVMEState *) opaque;
     LOG_DBG("%s(): addr = 0x%08x\n", __func__, (unsigned)addr);
-    (void)n;
-    return 0;
+
+    /* Check if NVME controller Capabilities was written */
+    if (addr < NVME_SQ0TDBL) {
+        rd_val = nvme_cntrl_read_config(nvme_dev, addr, (uint8_t)MASK(1, 1));
+    } else if (addr >= NVME_SQ0TDBL && addr <= NVME_CQMAXHDBL) {
+        LOG_NORM("Undefined operation of reading the doorbell registers");
+        rd_val = 0;
+    } else {
+        LOG_ERR("Undefined address read");
+        LOG_ERR("Qemu supports only 64 queues");
+        rd_val = 0 ;
+    }
+    return rd_val;
 }
 
 /*********************************************************************
@@ -228,25 +310,17 @@ static uint32_t nvme_mmio_readl(void *opaque, target_phys_addr_t addr)
     NVMEState *nvme_dev = (NVMEState *) opaque;
 
     LOG_DBG("%s(): addr = 0x%08x\n", __func__, (unsigned)addr);
-    switch (addr) {
-    case NVME_CTST:
-        LOG_NORM("%s(): Status required.\n", __func__);
-        if ((nvme_dev->cstatus.rdy) &&
-            (nvme_dev->sq[ASQ_ID].dma_addr && nvme_dev->cq[ACQ_ID].dma_addr)) {
-            LOG_NORM("%s(): ADM QUEUES ARE SET. Return 1.\n",
-            __func__);
-            rd_val = 1;
-        }
-        break;
-    case NVME_CMD_SS:
-        /* Offset of doorbell region */
-        rd_val = NVME_SQ0TDBL;
-        break;
 
-    default:
-        LOG_NORM("Register not supported. offset: 0x%x\n",
-            (unsigned int) addr);
-        break;
+    /* Check if NVME controller Capabilities was written */
+    if (addr < NVME_SQ0TDBL) {
+        rd_val = nvme_cntrl_read_config(nvme_dev, addr, (uint8_t)MASK(1, 2));
+    } else if (addr >= NVME_SQ0TDBL && addr <= NVME_CQMAXHDBL) {
+        LOG_NORM("Undefined operation of reading the doorbell registers");
+        rd_val = 0;
+    } else {
+        LOG_ERR("Undefined address read");
+        LOG_ERR("Qemu supports only 64 queues");
+        rd_val = 0 ;
     }
     return rd_val;
 }
@@ -292,7 +366,7 @@ static inline uint8_t range_covers_reg(uint64_t addr, uint64_t len,
 static void nvme_pci_write_config(PCIDevice *pci_dev,
                                     uint32_t addr, uint32_t val, int len)
 {
-    LOG_DBG("%s(): addr = 0x%08x\n", __func__, (unsigned)addr);
+
     /* Writing the PCI Config Space */
     pci_default_write_config(pci_dev, addr, val, len);
     LOG_DBG("RW Mask : 0x%08x", pci_dev->wmask[addr]);
@@ -322,7 +396,6 @@ static void nvme_pci_write_config(PCIDevice *pci_dev,
 static uint32_t nvme_pci_read_config(PCIDevice *pci_dev, uint32_t addr, int len)
 {
     uint32_t val;
-    LOG_DBG("%s(): addr = 0x%08x\n", __func__, (unsigned)addr);
     val = pci_default_read_config(pci_dev, addr, len);
     return val;
 }
@@ -345,6 +418,7 @@ static void nvme_mmio_map(PCIDevice *pci_dev, int reg_num, pcibus_t addr,
     if (reg_num) {
         LOG_NORM("Only bar0 is allowed! reg_num: %d\n", reg_num);
     }
+
     /* Is this hacking? */
     /* BAR 0 is shared: Registry, doorbells and MSI-X. Only
      * registry and doorbell part of BAR0 should be handled
@@ -368,30 +442,31 @@ static void nvme_mmio_map(PCIDevice *pci_dev, int reg_num, pcibus_t addr,
 *********************************************************************/
 static void nvme_set_registry(NVMEState *n)
 {
-    if (!n) {
-        return;
+    /* This is the default initialization sequence when
+     * config file is not found */
+    uint32_t ind, index;
+    uint32_t val, rw_mask, rws_mask, rwc_mask;
+    for (ind = 0; ind < sizeof(nvme_reg)/sizeof(nvme_reg[0]); ind++) {
+        rw_mask = nvme_reg[ind].rw_mask;
+        rwc_mask = nvme_reg[ind].rwc_mask;
+        rws_mask = nvme_reg[ind].rws_mask;
+
+        LOG_DBG("Length Read : %u\n", nvme_reg[ind].len);
+        LOG_DBG("Offset Read : %u\n", nvme_reg[ind].offset);
+        LOG_DBG("Val Read : %u\n", nvme_reg[ind].reset);
+        LOG_DBG("RW Mask Read : %u\n", nvme_reg[ind].rw_mask);
+        LOG_DBG("RWC Mask Read : %u\n", nvme_reg[ind].rwc_mask);
+        LOG_DBG("RWS Mask Read : %u\n", nvme_reg[ind].rws_mask);
+        val = nvme_reg[ind].reset;
+        for (index = 0; index < nvme_reg[ind].len; val >>= 8, rw_mask >>= 8,
+            rwc_mask >>= 8, rws_mask >>= 8, index++) {
+            n->cntrl_reg[nvme_reg[ind].offset + index] = val;
+            n->rw_mask[nvme_reg[ind].offset + index] = rw_mask;
+            n->rws_mask[nvme_reg[ind].offset + index] = rws_mask;
+            n->rwc_mask[nvme_reg[ind].offset + index] = rwc_mask;
+            n->used_mask[nvme_reg[ind].offset + index] = (uint8_t)MASK(8, 0);
+        }
     }
-    n->ctrlcap.mpsmax = 0; /* 4kB*/
-    n->ctrlcap.mpsmin = 0; /* 4kB*/
-    n->ctrlcap.css = 1; /* set bit 37*/
-    n->ctrlcap.to = 0xf; /* maximum possible timeout. */
-    n->ctrlcap.ams = 0; /* TBD */
-    n->ctrlcap.cqr = 1; /* Controller Requires contiguous memory. */
-    /* each command is 64 bytes. That gives 4kB */
-    n->ctrlcap.mqes = NVME_MAX_QUEUE_SIZE - 1;
-
-    n->cconf.mps = 0;
-
-    n->ctrlv.mjr = 1;
-    n->ctrlv.mnr = 0;
-
-    n->cstatus.rdy = 0;
-    n->cstatus.cfs = 0;
-    n->cstatus.shst = 0;
-
-    n->feature.number_of_queues = ((NVME_MAX_QID - 1) << 16)
-                             | (NVME_MAX_QID - 1);
-    return;
 }
 
 /*********************************************************************
@@ -484,6 +559,57 @@ static void pci_space_init(PCIDevice *pci_dev)
 }
 
 /*********************************************************************
+    Function     :    read_file
+    Description  :    Reading the config files accompanied with error
+                      handling
+    Return Type  :    void
+    Arguments    :    NVMEState * : Pointer to the NVMEState device
+                      uint8_t : Space to Read
+                                NVME_SPACE and PCI_SPACE
+*********************************************************************/
+static void read_file(NVMEState *n, uint8_t space)
+{
+    /* Pointer for Config file and temp file */
+    FILE *config_file;
+    /* Array to store the PATH to config files
+     * NVME_DEVICE_PCI_CONFIG_FILE and
+     * NVME_DEVICE_NVME_CONFIG_FILE
+     */
+    char file_path[MAX_CHAR_PER_LINE];
+
+    /* Get the Config File Path in the system */
+    read_file_path(file_path, space);
+
+    config_file = fopen((char *)file_path, "r");
+    if (config_file == NULL) {
+        LOG_ERR("Could not open the config file");
+        if (space == NVME_SPACE) {
+            LOG_NORM("Defaulting the NVME space..");
+            nvme_set_registry(n);
+        } else if (space == PCI_SPACE) {
+            LOG_NORM("Defaulting the PCI space..");
+            pci_space_init(&n->dev);
+        }
+    } else {
+        /* Reads config File */
+        if (read_config_file(config_file, n, space)) {
+            fclose(config_file);
+            LOG_ERR("Error Reading the Config File");
+            if (space == NVME_SPACE) {
+                LOG_NORM("Defaulting the NVME space..");
+                nvme_set_registry(n);
+            } else if (space == PCI_SPACE) {
+                LOG_NORM("Defaulting the PCI space..");
+                pci_space_init(&n->dev);
+            }
+        } else {
+            /* Close the File */
+            fclose(config_file);
+        }
+    }
+}
+
+/*********************************************************************
     Function     :    pci_nvme_init
     Description  :    NVME initialization
     Return Type  :    int
@@ -496,39 +622,14 @@ static int pci_nvme_init(PCIDevice *pci_dev)
     NVMEState *n = DO_UPCAST(NVMEState, dev, pci_dev);
     uint8_t *pci_conf = NULL;
     uint32_t ret;
-    /* Pointer for Config file and temp file */
-    FILE *config_file;
-
-    /* Array to store the PATH to config files
-     * NVME_DEVICE_PCI_CONFIG_FILE and
-     * NVME_DEVICE_NVME_CONFIG_FILE
-     */
-    char file_path[MAX_CHAR_PER_LINE];
 
     pci_conf = n->dev.config;
     n->nvectors = NVME_MSIX_NVECTORS;
     n->bar0_size = NVME_REG_SIZE;
 
-    /* Get the Config File Path in the system */
-    read_file_path(file_path, PCI_SPACE);
+    /* Reading the PCI space from the file */
+    read_file(n, PCI_SPACE);
 
-    config_file = fopen((char *)file_path, "r");
-    if (config_file == NULL) {
-        LOG_ERR("Could not open the config file");
-        LOG_NORM("Defaulting the PCI space..");
-        pci_space_init(pci_dev);
-    } else {
-        /* Reads PCI config File */
-        if (read_config_file(config_file, n, PCI_SPACE)) {
-            fclose(config_file);
-            LOG_ERR("Error Reading the Config File\n");
-            LOG_NORM("Defaulting the PCI space..\n");
-            pci_space_init(pci_dev);
-        } else {
-            /* Close the File */
-            fclose(config_file);
-        }
-    }
     LOG_NORM("%s(): Reg0 size %u, nvectors: %hu\n", __func__,
         n->bar0_size, n->nvectors);
 
@@ -544,10 +645,40 @@ static int pci_nvme_init(PCIDevice *pci_dev)
         PCI_BASE_ADDRESS_MEM_TYPE_64),
         nvme_mmio_map);
 
+    /* Allocating space for NVME regspace & masks except the doorbells */
+    n->cntrl_reg = qemu_mallocz(NVME_CNTRL_SIZE);
+    n->rw_mask = qemu_mallocz(NVME_CNTRL_SIZE);
+    n->rwc_mask = qemu_mallocz(NVME_CNTRL_SIZE);
+    n->rws_mask = qemu_mallocz(NVME_CNTRL_SIZE);
+    n->used_mask = qemu_mallocz(NVME_CNTRL_SIZE);
+    /* Setting up the pointers in NVME address Space
+     * TODO
+     * These pointers have been defined since
+     * present code uses the older defined strucutres
+     * which has been replaced by pointers.
+     * Once each and every reference is replaced by
+     * offset from cntrl_reg, remove these pointers
+     * becasue bit field structures are not portable
+     * especially when the memory locations of the bit fields
+     * have importance
+     */
+    n->ctrlcap = (NVMECtrlCap *) (n->cntrl_reg + NVME_CAP);
+    n->ctrlv = (NVMEVersion *) (n->cntrl_reg + NVME_VER);
+    n->cconf = (NVMECtrlConf *) (n->cntrl_reg + NVME_CC);
+    n->cstatus = (NVMECtrlStatus *) (n->cntrl_reg + NVME_CTST);
+    n->admqattrs = (NVMEAQA *) (n->cntrl_reg + NVME_AQA);
+
+    /* Update NVME space registery from config file */
+    read_file(n, NVME_SPACE);
+
+    /* Defaulting the number of Queues */
+    n->feature.number_of_queues = ((NVME_MAX_QID - 1) << 16)
+        | (NVME_MAX_QID - 1);
+
     for (ret = 0; ret < n->nvectors; ret++) {
         msix_vector_use(&n->dev, ret);
     }
-    nvme_set_registry(n);
+
 
     for (ret = 0; ret < NVME_MAX_QID; ret++) {
         memset(&(n->sq[ret]), 0, sizeof(NVMEIOSQueue));
@@ -569,6 +700,13 @@ static int pci_nvme_init(PCIDevice *pci_dev)
 static int pci_nvme_uninit(PCIDevice *pci_dev)
 {
     NVMEState *n = DO_UPCAST(NVMEState, dev, pci_dev);
+    /* Freeing space allocated for NVME regspace masks except the doorbells */
+    qemu_free(n->cntrl_reg);
+    qemu_free(n->rw_mask);
+    qemu_free(n->rwc_mask);
+    qemu_free(n->rws_mask);
+    qemu_free(n->used_mask);
+    LOG_NORM("Freed NVME device memory");
     nvme_close_storage_file(n);
     return 0;
 }

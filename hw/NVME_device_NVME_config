@@ -28,9 +28,12 @@ indicates that the last bit in that register has a capability of read only.
 Each line in the file needs to be no more than 255 charachters and the CFG_NAME
 has a limit of 50 charachters.
 
-Values (VALUES) to be written can be either 8 bits, 16 bits or 32 bits with
+Values (VALUE) to be written can be either 8 bits, 16 bits or 32 bits with
 the appropriate lengths. If you want to write 64 bit values , divide it
 into two 32 bit values and enter in the config file.
+
+Doorbell Registers support has not been added yet ,and is defaulted to 64
+Queues in NVME module
 
 Section 2: Parsing Syntax
     The Qemu parser, would only look for values under the <REG> and </REG>.
@@ -50,7 +53,7 @@ the parser
 	NAME = "CAP_LOWER_32"
 	OFFSET = 0x00
 	LENGTH = 0x04
-	VALUE = 0x00000000
+	VALUE = 0x0f0103FF
 	RO_MASK = 0xFFFFFFFF
 	RW_MASK = 0x00000000
 	RWC_MASK = 0x00000000

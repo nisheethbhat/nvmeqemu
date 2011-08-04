@@ -46,13 +46,15 @@
 /* numbr  : Number of 1's required
  * offset : Offset from LSB
  */
-#define MASK(numbr, offset) ((0xffffffff) ^ (0xffffffff << numbr) << offset)
+#define MASK(numbr, offset) ((0xffffffff ^ (0xffffffff << numbr)) << offset)
 
 /* The spec requires giving the table structure
  * a 4K aligned region all by itself. */
 #define MSIX_PAGE_SIZE 0x1000
 /* Give 8kB for registers. Should be OK for 512 queues. */
 #define NVME_REG_SIZE (1024 * 8)
+/* Size of NVME Controller Registers except the Doorbells */
+#define NVME_CNTRL_SIZE 0xfff
 
 #define NVME_MAX_QID 64
 
@@ -118,7 +120,7 @@ struct NVMEBAR0 {
 };
 
 /* Controller Capabilities - all ReadOnly. TBD: Could be union. */
-struct NVMECtrlCap {
+typedef struct NVMECtrlCap {
     uint16_t mqes;
     uint16_t cqr:1;
     uint16_t ams:2;
@@ -130,15 +132,15 @@ struct NVMECtrlCap {
     uint16_t mpsmin:4;
     uint16_t mpsmax:4;
     uint16_t res3:8;
-};
+} NVMECtrlCap;
 
-struct NVMEVersion {
+typedef struct NVMEVersion {
     uint16_t mnr; /* minor = 0. */
     uint16_t mjr; /* major = 1. */
-};
+} NVMEVersion;
 
 /* Controller Configuration. */
-struct NVMECtrlConf {
+typedef struct NVMECtrlConf {
     uint16_t en:1;
     uint16_t res0:3;
     uint16_t css:3;
@@ -149,21 +151,21 @@ struct NVMECtrlConf {
     uint16_t iocqes:4;
     uint16_t res1:6;
     uint32_t res2;
-};
+} NVMECtrlConf;
 
-struct NVMECtrlStatus {
+typedef struct NVMECtrlStatus {
     uint32_t rdy:1;
     uint32_t cfs:1;
     uint32_t shst:2;
     uint32_t res:28;
-};
+} NVMECtrlStatus;
 
-struct NVMEAQA {
+typedef struct NVMEAQA {
     uint32_t asqs:12;
     uint32_t res0:4;
     uint32_t acqs:12;
     uint32_t res1:4;
-};
+} NVMEAQA;
 
 struct NVMECmd;
 typedef struct NVMEIOSQueue {
@@ -270,12 +272,14 @@ typedef struct NVMEState {
     void *bar0;
     int bar0_size;
     uint8_t nvectors;
-    struct NVMEBAR0 bar;
-    struct NVMECtrlCap ctrlcap;
-    struct NVMEVersion ctrlv;
-    struct NVMECtrlConf cconf; /* Ctrl configuration */
-    struct NVMECtrlStatus cstatus; /* Ctrl status */
-    struct NVMEAQA admqattrs; /* Admin queues attributes. */
+
+    /* Space for NVME Ctrl Space except doorbells */
+    uint8_t *cntrl_reg;
+    /* Masks for NVME Ctrl Registers */
+    uint8_t *rw_mask; /* RW/RO mask */
+    uint8_t *rwc_mask; /* RW1C mask */
+    uint8_t *rws_mask; /* RW1S mask */
+    uint8_t *used_mask; /* Used/Resv mask */
 
     struct nvme_features feature;
     uint32_t abort;
@@ -286,10 +290,152 @@ typedef struct NVMEState {
     int    fd;
     uint8_t *mapping_addr;
     size_t mapping_size;
-    /* Signaling Global flag between MMIO Register
-     * RW and Admin/IO Cmd threads */
-    uint8_t sync_flag;
+
+    /* TODO
+     * remove NVMEBAR0 from here
+     * since it does not serve any purpose
+     */
+    struct NVMEBAR0 bar;
+
+    /* TODO
+     * These pointers have been defined since
+     * present code uses the older defined strucutres
+     * which has been replaced by pointers.
+     * Once each and every reference is replaced by
+     * offset from cntrl_reg, remove these pointers
+     * becasue bit field structures are not portable
+     * especially when the memory locations of the bit fields
+     * have importance
+     */
+    NVMECtrlCap *ctrlcap;
+    NVMEVersion *ctrlv;
+    NVMECtrlConf *cconf; /* Ctrl configuration */
+    NVMECtrlStatus *cstatus; /* Ctrl status */
+    NVMEAQA *admqattrs; /* Admin queues attributes. */
+
 } NVMEState;
+
+/* Structure used for default initialization sequence (except doorbell) */
+struct NVMEReg {
+    uint32_t offset; /* Offset in NVME space */
+    uint32_t len; /* len in bytes */
+    uint32_t reset; /* reset value */
+    uint32_t rw_mask; /* RW/RO mask */
+    uint32_t rwc_mask; /* RW1C mask */
+    uint32_t rws_mask; /* RW1S mask */
+};
+
+/* static struct for default initialization sequence (except doorbell) */
+
+static const struct NVMEReg nvme_reg[] = {
+{
+    .offset = NVME_CAP,
+    .len = 0x04,
+    .reset = 0x0f0103FF,
+    .rw_mask = 0x00,
+    .rwc_mask = 0x00,
+    .rws_mask = 0x00,
+},
+
+{
+    .offset = NVME_CAP + 4,
+    .len = 0x04,
+    .reset = 0x00000020,
+    .rw_mask = 0x00,
+    .rwc_mask = 0x00,
+    .rws_mask = 0x00,
+},
+
+{
+    .offset = NVME_VER,
+    .len = 0x04,
+    .reset = 0x00010000,
+    .rw_mask = 0x00,
+    .rwc_mask = 0x00,
+    .rws_mask = 0x00,
+},
+
+{
+    .offset = NVME_INTMS,
+    .len = 0x04,
+    .reset = 0x00,
+    .rw_mask = 0x00,
+    .rwc_mask = 0x00,
+    .rws_mask = 0xFFFFFFFF,
+},
+
+{
+    .offset = NVME_INTMC,
+    .len = 0x04,
+    .reset = 0x00,
+    .rw_mask = 0x00,
+    .rwc_mask = 0xFFFFFFFF,
+    .rws_mask = 0x00,
+},
+
+{
+    .offset = NVME_CC,
+    .len = 0x04,
+    .reset = 0x00,
+    .rw_mask = 0x00FFFFF1,
+    .rwc_mask = 0x00,
+    .rws_mask = 0x00,
+},
+
+{
+    .offset = NVME_CTST,
+    .len = 0x04,
+    .reset = 0x00,
+    .rw_mask = 0x00,
+    .rwc_mask = 0x00,
+    .rws_mask = 0x00,
+},
+
+{
+    .offset = NVME_AQA,
+    .len = 0x04,
+    .reset = 0x00,
+    .rw_mask = 0x0FFF0FFF,
+    .rwc_mask = 0x00,
+    .rws_mask = 0x00,
+},
+
+{
+    .offset = NVME_ASQ,
+    .len = 0x04,
+    .reset = 0x00,
+    .rw_mask = 0xFFFFF000,
+    .rwc_mask = 0x00,
+    .rws_mask = 0x00,
+},
+
+{
+    .offset = NVME_ASQ + 4,
+    .len = 0x04,
+    .reset = 0x00,
+    .rw_mask = 0xFFFFFFFF,
+    .rwc_mask = 0x00,
+    .rws_mask = 0x00,
+},
+
+{
+    .offset = NVME_ACQ,
+    .len = 0x04,
+    .reset = 0x00,
+    .rw_mask = 0xFFFFF000,
+    .rwc_mask = 0x00,
+    .rws_mask = 0x00,
+},
+
+{
+    .offset = NVME_ACQ + 4,
+    .len = 0x04,
+    .reset = 0x00,
+    .rw_mask = 0xFFFFFFFF,
+    .rwc_mask = 0x00,
+    .rws_mask = 0x00,
+},
+};
 
 /*
  *    NVME Commands
@@ -770,5 +916,13 @@ void process_sq(NVMEState *n, uint16_t sq_id);
 /* Config file read functions */
 int read_config_file(FILE *, NVMEState *, uint8_t);
 int read_file_path(char *arr, uint8_t flag);
+
+/* Functions for NVME Controller space reads and writes
+ * (except doorbell)
+ */
+uint32_t nvme_cntrl_read_config(NVMEState *,
+    target_phys_addr_t, uint8_t);
+void nvme_cntrl_write_config(NVMEState *,
+    target_phys_addr_t, uint32_t, uint8_t);
 
 #endif /* NVME_H_ */

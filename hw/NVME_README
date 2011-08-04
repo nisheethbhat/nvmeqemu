@@ -60,7 +60,7 @@ http://dcgshare.lm.intel.com/gitweb/?p=nvme/manage.git;a=summary
 
 5. Install the chosen virtualized OS to the virtual HD
     1. cd nvme/manage
-    2. ./runqmu.sh <your_virtual_HD_filename> <your_iso_image_filename>
+    2. ./runqmu.sh <your_virtual_HD_filename> <your_iso_image_filename> -boot d
            A terminal windows should launch into view booting from the supplied ISO file.
            Follow through the usual actions to install the OS onto the virtual HD.
            Feel free to partition/format/re-initialize virtual HD as necessary.

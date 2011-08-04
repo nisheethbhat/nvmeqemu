@@ -142,7 +142,7 @@ int read_config_file(FILE *config_file , NVMEState *n, uint8_t flag)
                     n->dev.msix_bar_size = new_size_bar0;
                 } else if (data.offset == 2) {
                     /* Initializing the MSI-X Cap */
-                    temp_mask = data.val & MASK(11, 0);
+                    temp_mask = data.val & (uint32_t) MASK(11, 0);
                     if (temp_mask == 0) {
                         LOG_ERR("Wrong entry for Table Size inside MXC in\
                             Config File");
@@ -197,9 +197,14 @@ int read_config_file(FILE *config_file , NVMEState *n, uint8_t flag)
             }
 
 
-            if ((data.offset + offset + data.len) > 0x1000) {
+            if (((data.offset + offset + data.len) > 0x1000) && (flag ==
+                PCI_SPACE)) {
                 LOG_ERR("Invlaid Offsets present in the Config file for \
                     PCI address space \n");
+            } else if (((data.offset + offset + data.len) > 0xFFF) && (flag ==
+                NVME_SPACE)) {
+                LOG_ERR("Invlaid Offsets present in the Config file for \
+                    NVME address space \n");
             } else {
                 /* PCI / NVME space writes */
                 config_space_write(n, &data, flag, offset);
@@ -426,60 +431,42 @@ static void config_space_write(NVMEState *n, FILERead* data, uint8_t flag,
 {
     /* Pointer to config  space */
     uint8_t *conf = NULL;
-    /* Pointers for masks (PCI space) */
-    uint8_t *wmask = NULL, *used = NULL, *cmask = NULL, *w1cmask = NULL;
+    /* Pointers for masks */
+    uint8_t *wmask = NULL, *used = NULL, *cmask = NULL,
+        *w1cmask = NULL, *w1smask = NULL;
+    uint8_t index; /* Index for loop */
 
     if (PCI_SPACE == flag) {
         conf = n->dev.config;
         wmask = n->dev.wmask; /* R/W set if 1 else RO*/
         used = n->dev.used;
         cmask = n->dev.cmask;
-        w1cmask = n->dev.w1cmask; /* W1C set if 1 */
-    } else {
-        /* TODO
-         * Add the start address of NVME address Space
-         */
-    }
+        w1cmask = n->dev.w1cmask; /* W1C cleared if 1 */
 
-    /* Write to config Space */
-
-    /*
-     * TODO
-     * Remove the if statement to make the function more generalized
-     * If condition addded since the number of mask pointers for PCI and
-     * NVME space are different and for PCI space it is already defined in Qemu
-     */
-    if (flag == PCI_SPACE) {
-        if (data->len == 1) {
-            pci_set_byte(&conf[data->offset + offset], (uint8_t) data->val);
-            pci_set_byte(&wmask[data->offset + offset],
-                (uint8_t) data->rw_mask);
-            pci_set_byte(&used[data->offset + offset], (uint8_t) 1);
-            pci_set_byte(&cmask[data->offset + offset], (uint8_t) 1);
-            pci_set_byte(&w1cmask[data->offset + offset],
-                (uint8_t) data->rwc_mask);
-        } else if (data->len == 2) {
-            pci_set_word(&conf[data->offset + offset], (uint16_t) data->val);
-            pci_set_word(&wmask[data->offset + offset],
-                (uint16_t) data->rw_mask);
-            pci_set_word(&used[data->offset + offset], (uint16_t) 1);
-            pci_set_word(&cmask[data->offset + offset], (uint16_t) 1);
-            pci_set_word(&w1cmask[data->offset + offset],
-                (uint16_t) data->rwc_mask);
-        } else if (data->len == 4) {
-            pci_set_long(&conf[data->offset + offset], (uint32_t) data->val);
-            pci_set_long(&wmask[data->offset + offset],
-                (uint32_t) data->rw_mask);
-            pci_set_long(&used[data->offset + offset], (uint32_t) 1);
-            pci_set_long(&cmask[data->offset + offset], (uint32_t) 1);
-            pci_set_long(&w1cmask[data->offset + offset],
-                (uint32_t) data->rwc_mask);
+        /* Write to config Space */
+        for (index = 0; index < data->len; data->val >>= 8,
+            data->rw_mask >>= 8, data->rwc_mask >>= 8, index++) {
+            conf[data->offset + offset + index] = data->val;
+            wmask[data->offset + offset + index] = data->rw_mask;
+            used[data->offset + offset + index] = (uint8_t)MASK(8, 0);
+            cmask[data->offset + offset + index] = (uint8_t)MASK(8, 0);
+            w1cmask[data->offset + offset + index] = data->rwc_mask;
         }
-    } else {
-        /* TODO
-         * Add NVME Space Read/Writes
-         */
+    } else if (NVME_SPACE == flag) {
+        conf = n->cntrl_reg;
+        wmask = n->rw_mask; /* R/W set if 1 */
+        w1cmask = n->rwc_mask; /* W1C cleared if 1 */
+        w1smask = n->rws_mask; /* W1S set if 1 */
+        used = n->used_mask; /* Used /Resv */
+        /* Write to config Space */
+        for (index = 0; index < data->len; data->val >>= 8,
+            data->rws_mask >>= 8, data->rw_mask >>= 8, data->rwc_mask >>= 8,
+                index++) {
+            conf[data->offset + offset + index] = data->val;
+            wmask[data->offset + offset + index] = data->rw_mask;
+            w1smask[data->offset + offset + index] = data->rws_mask;
+            w1cmask[data->offset + offset + index] = data->rwc_mask;
+            used[data->offset + offset + index] = (uint8_t)MASK(8, 0);
+        }
     }
-
-
 }
