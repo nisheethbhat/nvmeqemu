@@ -340,7 +340,7 @@ defaulted to 0
 	NAME = "INTR"
 	OFFSET = 0x3C
 	LENGTH = 0x02
-	VALUE = 0x0
+	VALUE = 0x0100
 	RO_MASK = 0xFF00
 	RW_MASK = 0x00FF
 	RWC_MASK = 0x0000
