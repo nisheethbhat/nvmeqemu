@@ -81,7 +81,7 @@ int read_config_file(FILE *config_file , NVMEState *n, uint8_t flag)
                 update_var((char *)var_line, &data, &eor_flag, &sor_flag);
             } while (eor_flag != 1);
 
-            LOG_DBG("Length Read : %u\n", data.len);
+            /*LOG_DBG("Length Read : %u\n", data.len);
             LOG_DBG("Offset Read : %u\n", data.offset);
             LOG_DBG("Val Read : %u\n", data.val);
             LOG_DBG("RO Mask Read : %u\n", data.ro_mask);
@@ -89,7 +89,7 @@ int read_config_file(FILE *config_file , NVMEState *n, uint8_t flag)
             LOG_DBG("RWC Mask Read : %u\n", data.rwc_mask);
             LOG_DBG("RWS Mask Read : %u\n", data.rws_mask);
             LOG_DBG("CFG NAME Read : %s\n", data.cfg_name);
-
+*/
             /* Logic for extracting dependancy between different capabilites
              * from file
              */

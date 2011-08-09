@@ -132,13 +132,11 @@ static void nvme_mmio_writel(void *opaque, target_phys_addr_t addr,
     uint32_t val)
 {
     NVMEState *nvme_dev = (NVMEState *) opaque;
-    /* Strucutre Used for Worker Threads */
 
     LOG_DBG("%s(): addr = 0x%08x, val = 0x%08x\n",
         __func__, (unsigned)addr, val);
     /* Check if NVME controller Capabilities was written */
     if (addr < NVME_SQ0TDBL) {
-        LOG_DBG("%s(): addr = 0x%08x\n", __func__, (unsigned)addr);
         switch (addr) {
         case NVME_INTMS:
             break;
@@ -369,7 +367,7 @@ static void nvme_pci_write_config(PCIDevice *pci_dev,
 
     /* Writing the PCI Config Space */
     pci_default_write_config(pci_dev, addr, val, len);
-    LOG_DBG("RW Mask : 0x%08x", pci_dev->wmask[addr]);
+    /*LOG_DBG("RW Mask : 0x%08x", pci_dev->wmask[addr]); */
     if (range_covers_reg(addr, len, PCI_ROM_ADDRESS, PCI_ROM_ADDRESS_LEN)) {
         /* Defaulting EROM value to 0x00 */
         pci_set_long(&pci_dev->config[PCI_ROM_ADDRESS], (uint32_t) 0x00);
@@ -451,12 +449,13 @@ static void nvme_set_registry(NVMEState *n)
         rwc_mask = nvme_reg[ind].rwc_mask;
         rws_mask = nvme_reg[ind].rws_mask;
 
-        LOG_DBG("Length Read : %u\n", nvme_reg[ind].len);
+       /* LOG_DBG("Length Read : %u\n", nvme_reg[ind].len);
         LOG_DBG("Offset Read : %u\n", nvme_reg[ind].offset);
         LOG_DBG("Val Read : %u\n", nvme_reg[ind].reset);
         LOG_DBG("RW Mask Read : %u\n", nvme_reg[ind].rw_mask);
         LOG_DBG("RWC Mask Read : %u\n", nvme_reg[ind].rwc_mask);
         LOG_DBG("RWS Mask Read : %u\n", nvme_reg[ind].rws_mask);
+        */
         val = nvme_reg[ind].reset;
         for (index = 0; index < nvme_reg[ind].len; val >>= 8, rw_mask >>= 8,
             rwc_mask >>= 8, rws_mask >>= 8, index++) {
