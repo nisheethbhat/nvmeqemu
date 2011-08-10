@@ -370,7 +370,6 @@ static void nvme_pci_write_config(PCIDevice *pci_dev,
 
     /* Writing the PCI Config Space */
     pci_default_write_config(pci_dev, addr, val, len);
-    /*LOG_DBG("RW Mask : 0x%08x", pci_dev->wmask[addr]); */
     if (range_covers_reg(addr, len, PCI_ROM_ADDRESS, PCI_ROM_ADDRESS_LEN)) {
         /* Defaulting EROM value to 0x00 */
         pci_set_long(&pci_dev->config[PCI_ROM_ADDRESS], (uint32_t) 0x00);
