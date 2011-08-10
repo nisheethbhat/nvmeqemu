@@ -165,7 +165,7 @@ static uint32_t adm_cmd_del_sq(NVMEState *n, NVMECmd *cmd, NVMECQE *cqe)
     NVMEStatusField *sf = (NVMEStatusField *)&cqe->status;
     sf->sc = NVME_SC_SUCCESS;
 
-    LOG_NORM("%s(): called\n", __func__);
+    LOG_NORM("%s(): called with QID:%d", __func__, c->qid);
 
     if (cmd->opcode != NVME_ADM_CMD_DELETE_SQ) {
         LOG_NORM("%s(): Invalid opcode %d\n", __func__, cmd->opcode);

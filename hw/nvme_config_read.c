@@ -53,15 +53,8 @@ int read_config_file(FILE *config_file , NVMEState *n, uint8_t flag)
     uint16_t offset = 0;
     /* Recent Capabilities pointer value*/
     uint16_t link = 0;
-    /* Temporary variable for bit masking */
-    uint32_t temp_mask = 0;
-    /* New Size of BAR0 */
-    uint32_t new_size_bar0 = 0 ;
     /* Structure to retain values for <REG to </REG> */
     FILERead data;
-
-
-
 
     /* Read the configuration file line by line */
 
@@ -81,15 +74,6 @@ int read_config_file(FILE *config_file , NVMEState *n, uint8_t flag)
                 update_var((char *)var_line, &data, &eor_flag, &sor_flag);
             } while (eor_flag != 1);
 
-            /*LOG_DBG("Length Read : %u\n", data.len);
-            LOG_DBG("Offset Read : %u\n", data.offset);
-            LOG_DBG("Val Read : %u\n", data.val);
-            LOG_DBG("RO Mask Read : %u\n", data.ro_mask);
-            LOG_DBG("RW Mask Read : %u\n", data.rw_mask);
-            LOG_DBG("RWC Mask Read : %u\n", data.rwc_mask);
-            LOG_DBG("RWS Mask Read : %u\n", data.rws_mask);
-            LOG_DBG("CFG NAME Read : %s\n", data.cfg_name);
-*/
             /* Logic for extracting dependancy between different capabilites
              * from file
              */
@@ -124,50 +108,10 @@ int read_config_file(FILE *config_file , NVMEState *n, uint8_t flag)
                     link = (uint8_t) data.val ;
                 }
             } else if (!strcmp(data.cfg_name, "MSIXCAP")) {
-                if (data.offset == 0) {
-                    /* One time initialization per CFG_NAME */
-                    offset = link;
-                    n->dev.cap_present = n->dev.cap_present | QEMU_PCI_CAP_MSIX;
-                    n->dev.msix_cap = (uint8_t) offset;
-
-                    /* Add space for MSI-X structures */
-                    if (!n->bar0_size) {
-                        new_size_bar0 = MSIX_PAGE_SIZE;
-                    } else if (n->bar0_size < MSIX_PAGE_SIZE) {
-                        new_size_bar0 = MSIX_PAGE_SIZE;
-                        new_size_bar0 = MSIX_PAGE_SIZE * 2;
-                    } else {
-                        new_size_bar0 = n->bar0_size * 2;
-                    }
-                    n->dev.msix_bar_size = new_size_bar0;
-                } else if (data.offset == 2) {
-                    /* Initializing the MSI-X Cap */
-                    temp_mask = data.val & (uint32_t) MASK(11, 0);
-                    if (temp_mask == 0) {
-                        LOG_ERR("Wrong entry for Table Size inside MXC in\
-                            Config File");
-                        LOG_ERR("Deafulting the value to 1");
-                        n->nvectors = 0;
-                    } else {
-                        n->nvectors = (temp_mask - 1);
-                    }
-                } else if (data.offset == 4) {
-                    /* TODO:
-                     * Add support for linking BAR's to Table BIR
-                     * depending upon MTAB
-                     */
-                } else if (data.offset == 8) {
-                    /* TODO:
-                     * Add support for linking BAR's to PBA BIR
-                     * depending upon MPBA
-                     */
-                }
-
-                if (data.offset == 0 && data.len > 1) {
-                    link = (uint8_t) (data.val >> 8);
-                } else if (data.offset == 1) {
-                    link = (uint8_t) data.val ;
-                }
+                /* MSIX not supported from config file as
+                 * explained in config file
+                 */
+                goto skip;
             } else if (!strcmp(data.cfg_name, "PXCAP")) {
                 if (data.offset == 0) {
                     /* One time initialization per CFG_NAME */
@@ -211,7 +155,7 @@ int read_config_file(FILE *config_file , NVMEState *n, uint8_t flag)
             }
 
         }
-
+skip:
         /* Reseting the data strucutre */
         data.len = 0;
         data.offset = 0;
@@ -257,7 +201,6 @@ int read_file_path(char *arr, uint8_t flag)
             "null 1>'");
         strcat((char *)cmd_arr, rnd);
         strcat((char *)cmd_arr, "'");
-        LOG_NORM("Find command : %s", cmd_arr);
     } else if (flag == NVME_SPACE) {
         strcpy((char *)cmd_arr, "find -name 'NVME_device_NVME_config' 2>/dev/"
             "null 1>'");
@@ -289,7 +232,6 @@ int read_file_path(char *arr, uint8_t flag)
         strcpy((char *)cmd_arr, "rm -rf '");
         strcat((char *)cmd_arr, rnd);
         strcat((char *)cmd_arr, "'");
-        LOG_NORM("Remove command : %s", cmd_arr);
         sys_ret = system(cmd_arr);
 
         if (sys_ret != 0) {

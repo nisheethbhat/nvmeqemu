@@ -50,6 +50,7 @@ static void process_doorbell(NVMEState *nvme_dev, target_phys_addr_t addr,
 {
     /* Used to get the SQ/CQ number to be written to */
     uint32_t queue_id;
+    uint32_t index;
 
     LOG_DBG("%s(): addr = 0x%08x, val = 0x%08x\n",
         __func__, (unsigned)addr, val);
@@ -75,11 +76,13 @@ static void process_doorbell(NVMEState *nvme_dev, target_phys_addr_t addr,
             return;
         }
         nvme_dev->sq[queue_id].tail = val & 0xffff;
-        /* Processing all the messages for that particular queue */
-        do {
-            process_sq(nvme_dev, queue_id);
-        } while (nvme_dev->sq[queue_id].head != nvme_dev->sq[queue_id].tail);
-
+        /* Process all the Queues */
+        for (index = 0; index < NVME_MAX_QID; index++) {
+            /* Processing all the messages for that particular queue */
+            while (nvme_dev->sq[index].head != nvme_dev->sq[index].tail) {
+                process_sq(nvme_dev, index);
+            }
+        }
     }
     return;
 }
@@ -449,13 +452,6 @@ static void nvme_set_registry(NVMEState *n)
         rwc_mask = nvme_reg[ind].rwc_mask;
         rws_mask = nvme_reg[ind].rws_mask;
 
-       /* LOG_DBG("Length Read : %u\n", nvme_reg[ind].len);
-        LOG_DBG("Offset Read : %u\n", nvme_reg[ind].offset);
-        LOG_DBG("Val Read : %u\n", nvme_reg[ind].reset);
-        LOG_DBG("RW Mask Read : %u\n", nvme_reg[ind].rw_mask);
-        LOG_DBG("RWC Mask Read : %u\n", nvme_reg[ind].rwc_mask);
-        LOG_DBG("RWS Mask Read : %u\n", nvme_reg[ind].rws_mask);
-        */
         val = nvme_reg[ind].reset;
         for (index = 0; index < nvme_reg[ind].len; val >>= 8, rw_mask >>= 8,
             rwc_mask >>= 8, rws_mask >>= 8, index++) {
@@ -519,12 +515,13 @@ static void qdev_nvme_reset(DeviceState *dev)
     Description  :    Hardcoded PCI space initialization
     Return Type  :    void
     Arguments    :    PCIDevice * : Pointer to the PCI device
+    Note:- RO/RW/RWC masks not supported for default PCI space
+    initialization
 *********************************************************************/
 static void pci_space_init(PCIDevice *pci_dev)
 {
     NVMEState *n = DO_UPCAST(NVMEState, dev, pci_dev);
     uint8_t *pci_conf = NULL;
-    uint32_t ret;
 
     pci_conf = n->dev.config;
 
@@ -547,14 +544,6 @@ static void pci_space_init(PCIDevice *pci_dev)
 
     n->nvectors = NVME_MSIX_NVECTORS;
     n->bar0_size = NVME_REG_SIZE;
-    ret = msix_init((struct PCIDevice *)&n->dev,
-        n->nvectors, 0, n->bar0_size);
-    if (ret) {
-        LOG_NORM("%s(): PCI MSI-X Failed\n", __func__);
-
-    } else {
-        LOG_NORM("%s(): PCI MSI-X Initialized\n", __func__);
-    }
 }
 
 /*********************************************************************
@@ -629,6 +618,13 @@ static int pci_nvme_init(PCIDevice *pci_dev)
     /* Reading the PCI space from the file */
     read_file(n, PCI_SPACE);
 
+    ret = msix_init((struct PCIDevice *)&n->dev,
+         n->nvectors, 0, n->bar0_size);
+    if (ret) {
+        LOG_NORM("%s(): PCI MSI-X Failed\n", __func__);
+    } else {
+        LOG_NORM("%s(): PCI MSI-X Initialized\n", __func__);
+    }
     LOG_NORM("%s(): Reg0 size %u, nvectors: %hu\n", __func__,
         n->bar0_size, n->nvectors);
 
