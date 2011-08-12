@@ -41,6 +41,8 @@
 #define PCI_ROM_ADDRESS_LEN 0x04
 #define PCI_BIST_LEN 0x01
 #define PCI_BASE_ADDRESS_2_LEN 0x04
+/* Defines the number of entries to process per execution */
+#define ENTRIES_TO_PROCESS 4
 
 /* Used to create masks */
 /* numbr  : Number of 1's required
@@ -312,6 +314,9 @@ typedef struct NVMEState {
     NVMECtrlConf *cconf; /* Ctrl configuration */
     NVMECtrlStatus *cstatus; /* Ctrl status */
     NVMEAQA *admqattrs; /* Admin queues attributes. */
+
+    QEMUTimer *sq_processing_timer;
+    int64_t sq_processing_timer_target;
 
 } NVMEState;
 

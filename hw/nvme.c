@@ -35,7 +35,7 @@ static inline uint8_t range_covers_reg(uint64_t, uint64_t, uint64_t,
     uint64_t);
 static void process_doorbell(NVMEState *, target_phys_addr_t, uint32_t);
 static void read_file(NVMEState *, uint8_t);
-
+static void sq_processing_timer_cb(void *);
 
 /*********************************************************************
     Function     :    process_doorbell
@@ -50,7 +50,7 @@ static void process_doorbell(NVMEState *nvme_dev, target_phys_addr_t addr,
 {
     /* Used to get the SQ/CQ number to be written to */
     uint32_t queue_id;
-    uint32_t index;
+    int64_t deadline;
 
     LOG_DBG("%s(): addr = 0x%08x, val = 0x%08x\n",
         __func__, (unsigned)addr, val);
@@ -76,15 +76,51 @@ static void process_doorbell(NVMEState *nvme_dev, target_phys_addr_t addr,
             return;
         }
         nvme_dev->sq[queue_id].tail = val & 0xffff;
-        /* Process all the Queues */
-        for (index = 0; index < NVME_MAX_QID; index++) {
-            /* Processing all the messages for that particular queue */
-            while (nvme_dev->sq[index].head != nvme_dev->sq[index].tail) {
-                process_sq(nvme_dev, index);
-            }
+
+        /* Check if the SQ processing routine is scheduled for
+         * execution within 5 uS.If it isn't, make it so
+         */
+
+
+        deadline = qemu_get_clock_ns(vm_clock) + 5000;
+
+        if (nvme_dev->sq_processing_timer_target == 0) {
+            qemu_mod_timer(nvme_dev->sq_processing_timer, deadline);
+            nvme_dev->sq_processing_timer_target = deadline;
         }
     }
     return;
+}
+
+static void sq_processing_timer_cb(void *param)
+{
+    NVMEState *n =  (NVMEState *) param;
+    int sq_id;
+    int entries_to_process = ENTRIES_TO_PROCESS;
+
+    /* Check SQs for work */
+
+    for (sq_id = 0; sq_id < NVME_MAX_QID; sq_id++) {
+        while (n->sq[sq_id].head != n->sq[sq_id].tail) {
+            /* Handle one SQ entry */
+            process_sq(n, sq_id);
+            entries_to_process--;
+            if (entries_to_process == 0) {
+                /* Check back in a short while : 5 uS */
+                n->sq_processing_timer_target = qemu_get_clock_ns(vm_clock)
+                    + 5000;
+                qemu_mod_timer(n->sq_processing_timer,
+                    n->sq_processing_timer_target);
+
+                /* We're done for now */
+                return;
+            }
+        }
+    }
+
+    /* There isn't anything left to do: temporarily disable the timer */
+    n->sq_processing_timer_target = 0;
+    qemu_del_timer(n->sq_processing_timer);
 }
 
 /*********************************************************************
@@ -476,6 +512,9 @@ static void clear_nvme_device(NVMEState *n)
     if (!n) {
         return;
     }
+
+    qemu_del_timer(n->sq_processing_timer);
+    n->sq_processing_timer_target = 0;
     nvme_close_storage_file(n);
     nvme_set_registry(n);
 
@@ -681,6 +720,9 @@ static int pci_nvme_init(PCIDevice *pci_dev)
 
     n->fd = -1;
     n->mapping_addr = NULL;
+    n->sq_processing_timer = qemu_new_timer_ns(vm_clock,
+        sq_processing_timer_cb, n);
+
 
     return 0;
 }
@@ -694,12 +736,23 @@ static int pci_nvme_init(PCIDevice *pci_dev)
 static int pci_nvme_uninit(PCIDevice *pci_dev)
 {
     NVMEState *n = DO_UPCAST(NVMEState, dev, pci_dev);
+
     /* Freeing space allocated for NVME regspace masks except the doorbells */
     qemu_free(n->cntrl_reg);
     qemu_free(n->rw_mask);
     qemu_free(n->rwc_mask);
     qemu_free(n->rws_mask);
     qemu_free(n->used_mask);
+
+    if (n->sq_processing_timer) {
+        if (n->sq_processing_timer_target) {
+            qemu_del_timer(n->sq_processing_timer);
+            n->sq_processing_timer_target = 0;
+        }
+        qemu_free_timer(n->sq_processing_timer);
+        n->sq_processing_timer = NULL;
+    }
+
     LOG_NORM("Freed NVME device memory");
     nvme_close_storage_file(n);
     return 0;
