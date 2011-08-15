@@ -43,7 +43,10 @@
 #define PCI_BASE_ADDRESS_2_LEN 0x04
 /* Defines the number of entries to process per execution */
 #define ENTRIES_TO_PROCESS 4
-
+/* bytes,word and dword in bytes */
+#define BYTE 1
+#define WORD 2
+#define DWORD 4
 /* Used to create masks */
 /* numbr  : Number of 1's required
  * offset : Offset from LSB
@@ -317,7 +320,8 @@ typedef struct NVMEState {
 
     QEMUTimer *sq_processing_timer;
     int64_t sq_processing_timer_target;
-
+    /* Used for PIN based and MSI interrupts */
+    uint32_t intr_vect;
 } NVMEState;
 
 /* Structure used for default initialization sequence (except doorbell) */

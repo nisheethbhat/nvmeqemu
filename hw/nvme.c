@@ -178,8 +178,28 @@ static void nvme_mmio_writel(void *opaque, target_phys_addr_t addr,
     if (addr < NVME_SQ0TDBL) {
         switch (addr) {
         case NVME_INTMS:
+            /* Operation not defined if MSI-X is enabled */
+            if (nvme_dev->dev.msix_cap != 0x00 &&
+                (nvme_pci_read_config(&nvme_dev->dev,
+                    (nvme_dev->dev.msix_cap+3), BYTE) & (uint8_t)MASK(1, 7))) {
+                LOG_NORM("MSI-X is enabled..write to INTMS is undefined");
+            } else {
+                /* MSICAP or PIN based ISR is enabled*/
+                nvme_cntrl_write_config(nvme_dev, NVME_INTMS,
+                    val, DWORD);
+            }
             break;
         case NVME_INTMC:
+            /* Operation not defined if MSI-X is enabled */
+            if (nvme_dev->dev.msix_cap != 0x00 &&
+                (nvme_pci_read_config(&nvme_dev->dev,
+                    (nvme_dev->dev.msix_cap+3), BYTE) & (uint8_t)MASK(1, 7))) {
+                LOG_NORM("MSI-X is enabled..write to INTMC is undefined");
+            } else {
+                /* MSICAP or PIN based ISR is enabled*/
+                nvme_cntrl_write_config(nvme_dev, NVME_INTMC,
+                    val, DWORD);
+            }
             break;
         case NVME_CC:
             /* Check if admin queues are ready to use */
@@ -242,20 +262,39 @@ void nvme_cntrl_write_config(NVMEState *nvme_dev,
     target_phys_addr_t addr, uint32_t val, uint8_t len)
 {
     uint8_t index;
-    for (index = 0; index < len && addr + index < NVME_CNTRL_SIZE;
-        val >>= 8, index++) {
-        /* Settign up RW and RO mask and making reserved bits non writable */
-        nvme_dev->cntrl_reg[addr + index] = (nvme_dev->cntrl_reg[addr + index]
-            & (~(nvme_dev->rw_mask[addr + index])
-                | ~(nvme_dev->used_mask[addr + index])))
-                    | (val & nvme_dev->rw_mask[addr + index]);
-        /* W1C: Write 1 to Clear */
-        nvme_dev->cntrl_reg[addr + index] &=
-            ~(val & nvme_dev->rwc_mask[addr + index]);
-        /* W1S: Write 1 to Set */
-        nvme_dev->cntrl_reg[addr + index] |=
-            (val & nvme_dev->rws_mask[addr + index]);
+    uint8_t * intr_vect = (uint8_t *) &nvme_dev->intr_vect;
+    if (range_covers_reg(addr, len, NVME_INTMS, DWORD) ||
+        range_covers_reg(addr, len, NVME_INTMC, DWORD)) {
+        /* Specific case for Interrupt masks */
+        for (index = 0; index < len && addr + index < NVME_CNTRL_SIZE;
+            val >>= 8, index++) {
+            /* W1C: Write 1 to Clear */
+            intr_vect[index] &=
+                ~(val & nvme_dev->rwc_mask[addr + index]);
+            /* W1S: Write 1 to Set */
+            intr_vect[index] |=
+                (val & nvme_dev->rws_mask[addr + index]);
+        }
+    } else {
+        for (index = 0; index < len && addr + index < NVME_CNTRL_SIZE;
+            val >>= 8, index++) {
+            /* Settign up RW and RO mask and making reserved bits
+             * non writable
+             */
+            nvme_dev->cntrl_reg[addr + index] =
+                (nvme_dev->cntrl_reg[addr + index]
+                & (~(nvme_dev->rw_mask[addr + index])
+                    | ~(nvme_dev->used_mask[addr + index])))
+                        | (val & nvme_dev->rw_mask[addr + index]);
+            /* W1C: Write 1 to Clear */
+            nvme_dev->cntrl_reg[addr + index] &=
+                ~(val & nvme_dev->rwc_mask[addr + index]);
+            /* W1S: Write 1 to Set */
+            nvme_dev->cntrl_reg[addr + index] |=
+                (val & nvme_dev->rws_mask[addr + index]);
+        }
     }
+
 }
 
 /*********************************************************************
@@ -275,6 +314,20 @@ uint32_t nvme_cntrl_read_config(NVMEState *nvme_dev,
     assert(len == 1 || len == 2 || len == 4);
     len = MIN(len, NVME_CNTRL_SIZE - addr);
     memcpy(&val, nvme_dev->cntrl_reg + addr, len);
+
+    if (range_covers_reg(addr, len, NVME_INTMS, DWORD) ||
+        range_covers_reg(addr, len, NVME_INTMC, DWORD)) {
+        /* Check if MSIX is enabled */
+        if (nvme_dev->dev.msix_cap != 0x00 &&
+            (nvme_pci_read_config(&nvme_dev->dev,
+                (nvme_dev->dev.msix_cap+3), BYTE) & (uint8_t)MASK(1, 7))) {
+            LOG_NORM("MSI-X is enabled..read to INTMS/INTMC is undefined");
+            val = 0;
+        } else {
+            /* Read of INTMS or INTMC should return interrupt vector */
+            val = nvme_dev->intr_vect;
+        }
+    }
     return le32_to_cpu(val);
 }
 /*********************************************************************
@@ -293,7 +346,7 @@ static uint32_t nvme_mmio_readb(void *opaque, target_phys_addr_t addr)
     LOG_DBG("%s(): addr = 0x%08x\n", __func__, (unsigned)addr);
     /* Check if NVME controller Capabilities was written */
     if (addr < NVME_SQ0TDBL) {
-        rd_val = nvme_cntrl_read_config(nvme_dev, addr, (uint8_t)MASK(1, 0));
+        rd_val = nvme_cntrl_read_config(nvme_dev, addr, BYTE);
     } else if (addr >= NVME_SQ0TDBL && addr <= NVME_CQMAXHDBL) {
         LOG_NORM("Undefined operation of reading the doorbell registers");
         rd_val = 0;
@@ -322,7 +375,7 @@ static uint32_t nvme_mmio_readw(void *opaque, target_phys_addr_t addr)
 
     /* Check if NVME controller Capabilities was written */
     if (addr < NVME_SQ0TDBL) {
-        rd_val = nvme_cntrl_read_config(nvme_dev, addr, (uint8_t)MASK(1, 1));
+        rd_val = nvme_cntrl_read_config(nvme_dev, addr, WORD);
     } else if (addr >= NVME_SQ0TDBL && addr <= NVME_CQMAXHDBL) {
         LOG_NORM("Undefined operation of reading the doorbell registers");
         rd_val = 0;
@@ -350,7 +403,7 @@ static uint32_t nvme_mmio_readl(void *opaque, target_phys_addr_t addr)
 
     /* Check if NVME controller Capabilities was written */
     if (addr < NVME_SQ0TDBL) {
-        rd_val = nvme_cntrl_read_config(nvme_dev, addr, (uint8_t)MASK(1, 2));
+        rd_val = nvme_cntrl_read_config(nvme_dev, addr, DWORD);
     } else if (addr >= NVME_SQ0TDBL && addr <= NVME_CQMAXHDBL) {
         LOG_NORM("Undefined operation of reading the doorbell registers");
         rd_val = 0;
@@ -377,7 +430,7 @@ static CPUReadMemoryFunc * const nvme_mmio_read[] = {
 /*********************************************************************
     Function     :    range_covers_reg
     Description  :    Checks whether the given range covers a
-                      particular register
+                      particular register completley/partially
     Return Type  :    uint8_t : 1 : covers , 0 : does not cover
     Arguments    :    uint64_t : Start addr to write
                       uint64_t : Length to be written
@@ -388,7 +441,8 @@ static inline uint8_t range_covers_reg(uint64_t addr, uint64_t len,
     uint64_t reg , uint64_t reg_size)
 {
     return (uint8_t) ((addr <= reg) &&
-        (range_get_last(reg, reg_size) <= range_get_last(addr, len)));
+        ((range_get_last(reg, reg_size) <= range_get_last(addr, len)) ||
+                (range_get_last(reg, BYTE) <= range_get_last(addr, len))));
 }
 
 /*********************************************************************
