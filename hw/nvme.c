@@ -138,6 +138,7 @@ static void nvme_mmio_writeb(void *opaque, target_phys_addr_t addr,
 
     LOG_DBG("%s(): addr = 0x%08x, val = 0x%08x\n",
         __func__, (unsigned)addr, val);
+    LOG_NORM("writeb is not supported");
     (void)n;
 }
 
@@ -156,6 +157,7 @@ static void nvme_mmio_writew(void *opaque, target_phys_addr_t addr,
 
     LOG_DBG("%s(): addr = 0x%08x, val = 0x%08x\n",
         __func__, (unsigned)addr, val);
+    LOG_NORM("writew is not supported");
     (void)n;
 }
 
@@ -171,6 +173,7 @@ static void nvme_mmio_writel(void *opaque, target_phys_addr_t addr,
     uint32_t val)
 {
     NVMEState *nvme_dev = (NVMEState *) opaque;
+    uint32_t var; /* Variable to store reg values locally */
 
     LOG_DBG("%s(): addr = 0x%08x, val = 0x%08x\n",
         __func__, (unsigned)addr, val);
@@ -202,10 +205,13 @@ static void nvme_mmio_writel(void *opaque, target_phys_addr_t addr,
             }
             break;
         case NVME_CC:
-            /* Check if admin queues are ready to use */
-            /* Check enable bit CC.EN */
+            nvme_cntrl_write_config(nvme_dev, NVME_CC, val, DWORD);
             /* TODO add support for other CC properties */
-            if (val & 1) {
+            var = nvme_cntrl_read_config(nvme_dev, NVME_CC, DWORD);
+            /* Check if admin queues are ready to use and
+             * check enable bit CC.EN
+             */
+            if (var & 1) {
                 if (nvme_dev->cq[ACQ_ID].dma_addr &&
                     nvme_dev->sq[ASQ_ID].dma_addr &&
                     (!nvme_open_storage_file(nvme_dev))) {
@@ -217,20 +223,25 @@ static void nvme_mmio_writel(void *opaque, target_phys_addr_t addr,
             }
             break;
         case NVME_AQA:
+            nvme_cntrl_write_config(nvme_dev, NVME_AQA, val, DWORD);
             nvme_dev->sq[ASQ_ID].size = val & 0xfff;
             nvme_dev->cq[ACQ_ID].size = (val >> 16) & 0xfff;
             break;
         case NVME_ASQ:
+            nvme_cntrl_write_config(nvme_dev, NVME_ASQ, val, DWORD);
             nvme_dev->sq[ASQ_ID].dma_addr |= val;
             break;
         case (NVME_ASQ + 4):
+            nvme_cntrl_write_config(nvme_dev, (NVME_ASQ + 4), val, DWORD);
             nvme_dev->sq[ASQ_ID].dma_addr |=
                     (uint64_t)((uint64_t)val << 32);
             break;
         case NVME_ACQ:
+            nvme_cntrl_write_config(nvme_dev, NVME_ACQ, val, DWORD);
             nvme_dev->cq[ACQ_ID].dma_addr |= val;
             break;
         case (NVME_ACQ + 4):
+            nvme_cntrl_write_config(nvme_dev, (NVME_ACQ + 4), val, DWORD);
             nvme_dev->cq[ACQ_ID].dma_addr |=
                     (uint64_t)((uint64_t)val << 32);
             break;
@@ -238,11 +249,7 @@ static void nvme_mmio_writel(void *opaque, target_phys_addr_t addr,
             break;
         }
     } else if (addr >= NVME_SQ0TDBL && addr <= NVME_CQMAXHDBL) {
-        /* TODO hardcoding doorbell register write masks since it's
-         * never read from config file
-         */
-
-        /* Process the Doorbell Writes */
+        /* Process the Doorbell Writes and masking of higher word */
         process_doorbell(nvme_dev, addr, val);
     }
     return;
