@@ -138,7 +138,7 @@ static void nvme_mmio_writeb(void *opaque, target_phys_addr_t addr,
 
     LOG_DBG("%s(): addr = 0x%08x, val = 0x%08x\n",
         __func__, (unsigned)addr, val);
-    LOG_NORM("writeb is not supported");
+    LOG_NORM("writeb is not supported!");
     (void)n;
 }
 
@@ -157,7 +157,7 @@ static void nvme_mmio_writew(void *opaque, target_phys_addr_t addr,
 
     LOG_DBG("%s(): addr = 0x%08x, val = 0x%08x\n",
         __func__, (unsigned)addr, val);
-    LOG_NORM("writew is not supported");
+    LOG_NORM("writew is not supported!");
     (void)n;
 }
 
@@ -258,7 +258,7 @@ static void nvme_mmio_writel(void *opaque, target_phys_addr_t addr,
 /*********************************************************************
     Function     :    nvme_cntrl_write_config
     Description  :    Function for NVME Controller space writes
-                      (except doorbell reads)
+                      (except doorbell writes)
     Return Type  :    void
     Arguments    :    NVMEState * : Pointer to NVME device State
                       target_phys_addr_t : address (offset address)
