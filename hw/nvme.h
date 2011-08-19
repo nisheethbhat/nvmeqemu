@@ -48,6 +48,8 @@
 #define WORD 2
 #define DWORD 4
 
+/* NVME Cntrl Space specific #defines */
+#define CC_EN 1
 /* Used to create masks */
 /* numbr  : Number of 1's required
  * offset : Offset from LSB

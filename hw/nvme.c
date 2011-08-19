@@ -211,7 +211,7 @@ static void nvme_mmio_writel(void *opaque, target_phys_addr_t addr,
             var = nvme_cntrl_read_config(nvme_dev, NVME_CC, DWORD);
 
             /* For 0->1 transition of CC.EN */
-            if (((var & 1) ^ (val & 1)) && (val & 1)) {
+            if (((var & CC_EN) ^ (val & CC_EN)) && (val & CC_EN)) {
                 /* Write to CC reg */
                 nvme_cntrl_write_config(nvme_dev, NVME_CC, val, DWORD);
                 /* Check if admin queues are ready to use and
@@ -221,10 +221,10 @@ static void nvme_mmio_writel(void *opaque, target_phys_addr_t addr,
                     nvme_dev->sq[ASQ_ID].dma_addr &&
                     (!nvme_open_storage_file(nvme_dev))) {
                     /* Update CSTS.RDY based on CC.EN and set the phase tag */
-                    nvme_dev->cntrl_reg[NVME_CTST] |= 0x01 ;
+                    nvme_dev->cntrl_reg[NVME_CTST] |= CC_EN ;
                     nvme_dev->cq[ACQ_ID].phase_tag = 1;
                 }
-            } else if ((var & 1) ^ (val & 1)) {
+            } else if ((var & CC_EN) ^ (val & CC_EN)) {
                 /* For 1->0 transition for CC.EN */
                 /* Resetting the controller to a state defined in
                  * config file/default initialization
@@ -232,14 +232,9 @@ static void nvme_mmio_writel(void *opaque, target_phys_addr_t addr,
                 LOG_NORM("Resetting the NVME device to idle state");
                 clear_nvme_device(nvme_dev);
                 /* Update CSTS.RDY based on CC.EN */
-                nvme_dev->cntrl_reg[NVME_CTST] &= ~(1);
-
-            } else if ((var & 1) & (val & 1)) {
-                /* Writes when CC.EN is already set to 1 */
-                LOG_ERR("Writes to CC not allowed when CC.EN is set");
+                nvme_dev->cntrl_reg[NVME_CTST] &= ~(CC_EN);
             } else {
-                /* Writes before CC.EN is set */
-                /* write to CC reg */
+                /* Writes before/after CC.EN is set */
                 nvme_cntrl_write_config(nvme_dev, NVME_CC, val, DWORD);
             }
             break;
