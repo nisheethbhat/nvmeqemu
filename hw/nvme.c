@@ -595,12 +595,31 @@ static void clear_nvme_device(NVMEState *n)
         return;
     }
 
+    /* Inflight Operations will not be processed */
     qemu_del_timer(n->sq_processing_timer);
     n->sq_processing_timer_target = 0;
     nvme_close_storage_file(n);
 
+    /* Saving the Admin Queue States before reset */
+    n->aqstate.aqa = nvme_cntrl_read_config(n, NVME_AQA, DWORD);
+    n->aqstate.asqa = nvme_cntrl_read_config(n, NVME_ASQ + 4, DWORD);
+    n->aqstate.asqa = (n->aqstate.asqa << 32) |
+        nvme_cntrl_read_config(n, NVME_ASQ, DWORD);
+    n->aqstate.acqa = nvme_cntrl_read_config(n, NVME_ACQ + 4, DWORD);
+    n->aqstate.acqa = (n->aqstate.acqa << 32) |
+        nvme_cntrl_read_config(n, NVME_ACQ, DWORD);
+
     /* Update NVME space registery from config file */
     read_file(n, NVME_SPACE);
+
+    /* Writing the Admin Queue Attributes after reset */
+    nvme_cntrl_write_config(n, NVME_AQA, n->aqstate.aqa, DWORD);
+    nvme_cntrl_write_config(n, NVME_ASQ, (uint32_t) n->aqstate.asqa, DWORD);
+    nvme_cntrl_write_config(n, NVME_ASQ + 4,
+        (uint32_t) (n->aqstate.asqa >> 32), DWORD);
+    nvme_cntrl_write_config(n, NVME_ACQ, (uint32_t) n->aqstate.acqa, DWORD);
+    nvme_cntrl_write_config(n, NVME_ACQ + 4,
+        (uint32_t) (n->aqstate.acqa >> 32), DWORD);
 
     for (i = 0; i < NVME_MAX_QID; i++) {
         memset(&(n->sq[i]), 0, sizeof(NVMEIOSQueue));

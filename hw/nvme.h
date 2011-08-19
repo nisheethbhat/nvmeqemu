@@ -47,6 +47,7 @@
 #define BYTE 1
 #define WORD 2
 #define DWORD 4
+
 /* Used to create masks */
 /* numbr  : Number of 1's required
  * offset : Offset from LSB
@@ -124,6 +125,12 @@ struct NVMEBAR0 {
     /* not important. */
 };
 
+/* Used to hold the ASQ,ACQ and AQA between resets */
+struct AQState {
+    uint32_t    aqa;
+    uint64_t    asqa;
+    uint64_t    acqa;
+};
 /* Controller Capabilities - all ReadOnly. TBD: Could be union. */
 typedef struct NVMECtrlCap {
     uint16_t mqes;
@@ -296,11 +303,8 @@ typedef struct NVMEState {
     uint8_t *mapping_addr;
     size_t mapping_size;
 
-    /* TODO
-     * remove NVMEBAR0 from here
-     * since it does not serve any purpose
-     */
-    struct NVMEBAR0 bar;
+    /* Used to store the AQA,ASQ,ACQ between resets */
+    struct AQState aqstate;
 
     /* TODO
      * These pointers have been defined since
