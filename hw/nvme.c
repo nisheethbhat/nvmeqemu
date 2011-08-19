@@ -485,7 +485,6 @@ static inline uint8_t range_covers_reg(uint64_t addr, uint64_t len,
 static void nvme_pci_write_config(PCIDevice *pci_dev,
                                     uint32_t addr, uint32_t val, int len)
 {
-
     /* Writing the PCI Config Space */
     pci_default_write_config(pci_dev, addr, val, len);
     if (range_covers_reg(addr, len, PCI_ROM_ADDRESS, PCI_ROM_ADDRESS_LEN)) {
@@ -494,11 +493,8 @@ static void nvme_pci_write_config(PCIDevice *pci_dev,
     } else if (range_covers_reg(addr, len, PCI_BIST, PCI_BIST_LEN)) {
         /* Defaulting BIST value to 0x00 */
         pci_set_byte(&pci_dev->config[PCI_BIST], (uint8_t) 0x00);
-    } else if (range_covers_reg(addr, len, PCI_BASE_ADDRESS_2,
-        PCI_BASE_ADDRESS_2_LEN)) {
-        /* Defaulting IDBAR (BAR2) value to 0x00 */
-        pci_set_long(&pci_dev->config[PCI_BASE_ADDRESS_2], (uint32_t) 0x00);
     }
+
     /* Logic for Resets and other functionality stuff will come here */
     return;
 }
@@ -513,8 +509,14 @@ static void nvme_pci_write_config(PCIDevice *pci_dev,
 *********************************************************************/
 static uint32_t nvme_pci_read_config(PCIDevice *pci_dev, uint32_t addr, int len)
 {
-    uint32_t val;
+    uint32_t val; /* Value to be returned */
+
     val = pci_default_read_config(pci_dev, addr, len);
+    if (range_covers_reg(addr, len, PCI_BASE_ADDRESS_2, PCI_BASE_ADDRESS_2_LEN)
+        && (!(pci_dev->config[PCI_COMMAND] & PCI_COMMAND_IO))) {
+        /* When CMD.IOSE is not set */
+        val &= ~((uint32_t) PCI_COMMAND_IO);
+    }
     return val;
 }
 
