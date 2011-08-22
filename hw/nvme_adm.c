@@ -228,7 +228,7 @@ static uint32_t adm_cmd_alloc_sq(NVMEState *n, NVMECmd *cmd, NVMECQE *cqe)
 {
     NVMEAdmCmdCreateSQ *c = (NVMEAdmCmdCreateSQ *)cmd;
     NVMEIOSQueue *sq;
-    uint16_t i;
+    uint16_t id, *mqes;
     NVMEStatusField *sf = (NVMEStatusField *)&cqe->status;
     sf->sc = NVME_SC_SUCCESS;
 
@@ -260,9 +260,10 @@ static uint32_t adm_cmd_alloc_sq(NVMEState *n, NVMECmd *cmd, NVMECQE *cqe)
         sf->sc = NVME_COMPLETION_QUEUE_INVALID;
         return FAIL;
     }
+    mqes = (uint16_t *) n->cntrl_reg;
 
     /* Queue Size */
-    if (c->qsize > n->ctrlcap->mqes) {
+    if (c->qsize > (*mqes + 1)) {
         sf->sct = NVME_SCT_CMD_SPEC_ERR;
         sf->sc = NVME_MAX_QUEUE_SIZE_EXCEEDED;
         return FAIL;
@@ -283,8 +284,8 @@ static uint32_t adm_cmd_alloc_sq(NVMEState *n, NVMECmd *cmd, NVMECQE *cqe)
         return FAIL;
     }
 
-    i = adm_get_free_sq(n);
-    if (i == NVME_MAX_QID) {
+    id = adm_get_free_sq(n);
+    if (id == NVME_MAX_QID) {
         /* Failed */
         LOG_NORM("No free queue ID ???\n");
         sf->sct = NVME_SCT_CMD_SPEC_ERR;
@@ -292,7 +293,7 @@ static uint32_t adm_cmd_alloc_sq(NVMEState *n, NVMECmd *cmd, NVMECQE *cqe)
         return FAIL;
     }
 
-    sq = &n->sq[i];
+    sq = &n->sq[id];
     sq->id = c->qid;
     sq->size = c->qsize;
     sq->phys_contig = c->pc;
@@ -368,7 +369,7 @@ static uint32_t adm_cmd_alloc_cq(NVMEState *n, NVMECmd *cmd, NVMECQE *cqe)
 {
     NVMEAdmCmdCreateCQ *c = (NVMEAdmCmdCreateCQ *)cmd;
     NVMEIOCQueue *cq;
-    uint16_t i;
+    uint16_t id, *mqes;
     NVMEStatusField *sf = (NVMEStatusField *)&cqe->status;
     sf->sc = NVME_SC_SUCCESS;
 
@@ -412,10 +413,11 @@ static uint32_t adm_cmd_alloc_cq(NVMEState *n, NVMECmd *cmd, NVMECQE *cqe)
         return FAIL;
     }
 
+    mqes = (uint16_t *) n->cntrl_reg;
     /* Queue Size */
-    if (c->qsize > n->ctrlcap->mqes) {
-        LOG_NORM("c->qsize %d, n->ctrlcap.mqes %d\n",
-            c->qsize, n->ctrlcap->mqes);
+    if (c->qsize > (*mqes + 1)) {
+        LOG_NORM("c->qsize %d, CAP.MQES %d\n",
+            c->qsize, *mqes);
         sf->sct = NVME_SCT_CMD_SPEC_ERR;
         sf->sc = NVME_MAX_QUEUE_SIZE_EXCEEDED;
         return FAIL;
@@ -428,14 +430,14 @@ static uint32_t adm_cmd_alloc_cq(NVMEState *n, NVMECmd *cmd, NVMECQE *cqe)
         return FAIL;
     }
 
-    i = adm_get_free_cq(n);
-    if (i == NVME_MAX_QID) {
+    id = adm_get_free_cq(n);
+    if (id == NVME_MAX_QID) {
         LOG_NORM("i == NVME_MAX_QID\n");
         sf->sc = NVME_SC_INVALID_FIELD;
         return FAIL;
     }
 
-    cq = &n->cq[i];
+    cq = &n->cq[id];
 
     cq->id = c->qid;
     cq->dma_addr = c->prp1;
