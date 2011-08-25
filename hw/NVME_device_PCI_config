@@ -233,8 +233,7 @@ BIST Reg is defaulted to 0x00 when BIST.BC is 0
 	DESC = "Memory Register Base address upper 32 bits"
 </REG>
 
-Last bit of IDBAR Reg will be defaulted to 0 instead of 1 when
-CMD.IOSE in PCI space is not set
+IDBAR Reg will be read as 0h when CMD.IOSE in PCI space is not set
 (Refer: section 2.1.12 and 3.2 of NVM Express 1.0a)
 <REG>
 	CFG_NAME = PCIHEADER

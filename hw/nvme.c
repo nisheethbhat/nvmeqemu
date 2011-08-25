@@ -289,7 +289,7 @@ void nvme_cntrl_write_config(NVMEState *nvme_dev,
     uint8_t * intr_vect = (uint8_t *) &nvme_dev->intr_vect;
     if (range_covers_reg(addr, len, NVME_INTMS, DWORD) ||
         range_covers_reg(addr, len, NVME_INTMC, DWORD)) {
-    	/* Check if MSIX is enabled */
+        /* Check if MSIX is enabled */
         if (nvme_dev->dev.msix_cap != 0x00 &&
             (nvme_pci_read_config(&nvme_dev->dev,
                 (nvme_dev->dev.msix_cap+3), BYTE) & (uint8_t)MASK(1, 7))) {
@@ -491,7 +491,7 @@ static void nvme_pci_write_config(PCIDevice *pci_dev,
     /* Writing the PCI Config Space */
     pci_default_write_config(pci_dev, addr, val, len);
     if (range_covers_reg(addr, len, PCI_BIST, PCI_BIST_LEN)
-    		&& (!(pci_dev->config[PCI_BIST] & PCI_BIST_CAPABLE))) {
+            && (!(pci_dev->config[PCI_BIST] & PCI_BIST_CAPABLE))) {
         /* Defaulting BIST value to 0x00 */
         pci_set_byte(&pci_dev->config[PCI_BIST], (uint8_t) 0x00);
     }
