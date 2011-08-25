@@ -193,7 +193,7 @@ the respective driver
 	DESC = "Header Type"
 </REG>
 
-BIST Reg is not supported in QEMU and thus has been defaulted to 0x00
+BIST Reg is defaulted to 0x00 when BIST.BC is 0
 <REG>
 	CFG_NAME = PCIHEADER
 	NAME = "BIST"
@@ -313,8 +313,8 @@ CMD.IOSE in PCI space is not set
 	DESC = "Sub System Identfiers"
 </REG>
 
-EROM Register is not supported for NVME and thus "EROM" value is ignored and
-defaulted to 0
+If we remove EROM Register from this list it means "EROM" is not supported and thus is ignored
+and is defaulted to 0 as mentioned in the NVME specs
 <REG>
 	CFG_NAME = PCIHEADER
 	NAME = "EROM"

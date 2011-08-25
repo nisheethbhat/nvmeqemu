@@ -289,15 +289,22 @@ void nvme_cntrl_write_config(NVMEState *nvme_dev,
     uint8_t * intr_vect = (uint8_t *) &nvme_dev->intr_vect;
     if (range_covers_reg(addr, len, NVME_INTMS, DWORD) ||
         range_covers_reg(addr, len, NVME_INTMC, DWORD)) {
-        /* Specific case for Interrupt masks */
-        for (index = 0; index < len && addr + index < NVME_CNTRL_SIZE;
-            val >>= 8, index++) {
-            /* W1C: Write 1 to Clear */
-            intr_vect[index] &=
-                ~(val & nvme_dev->rwc_mask[addr + index]);
-            /* W1S: Write 1 to Set */
-            intr_vect[index] |=
-                (val & nvme_dev->rws_mask[addr + index]);
+    	/* Check if MSIX is enabled */
+        if (nvme_dev->dev.msix_cap != 0x00 &&
+            (nvme_pci_read_config(&nvme_dev->dev,
+                (nvme_dev->dev.msix_cap+3), BYTE) & (uint8_t)MASK(1, 7))) {
+            LOG_NORM("MSI-X is enabled..write to INTMS/INTMC is undefined");
+        } else {
+            /* Specific case for Interrupt masks */
+            for (index = 0; index < len && addr + index < NVME_CNTRL_SIZE;
+                val >>= 8, index++) {
+                /* W1C: Write 1 to Clear */
+                intr_vect[index] &=
+                    ~(val & nvme_dev->rwc_mask[addr + index]);
+                /* W1S: Write 1 to Set */
+                intr_vect[index] |=
+                    (val & nvme_dev->rws_mask[addr + index]);
+            }
         }
     } else {
         for (index = 0; index < len && addr + index < NVME_CNTRL_SIZE;
@@ -464,7 +471,7 @@ static CPUReadMemoryFunc * const nvme_mmio_read[] = {
 static inline uint8_t range_covers_reg(uint64_t addr, uint64_t len,
     uint64_t reg , uint64_t reg_size)
 {
-    return (uint8_t) ((addr <= reg) &&
+    return (uint8_t) ((addr <= range_get_last(reg, reg_size)) &&
         ((range_get_last(reg, reg_size) <= range_get_last(addr, len)) ||
                 (range_get_last(reg, BYTE) <= range_get_last(addr, len))));
 }
@@ -483,15 +490,12 @@ static void nvme_pci_write_config(PCIDevice *pci_dev,
 {
     /* Writing the PCI Config Space */
     pci_default_write_config(pci_dev, addr, val, len);
-    if (range_covers_reg(addr, len, PCI_ROM_ADDRESS, PCI_ROM_ADDRESS_LEN)) {
-        /* Defaulting EROM value to 0x00 */
-        pci_set_long(&pci_dev->config[PCI_ROM_ADDRESS], (uint32_t) 0x00);
-    } else if (range_covers_reg(addr, len, PCI_BIST, PCI_BIST_LEN)) {
+    if (range_covers_reg(addr, len, PCI_BIST, PCI_BIST_LEN)
+    		&& (!(pci_dev->config[PCI_BIST] & PCI_BIST_CAPABLE))) {
         /* Defaulting BIST value to 0x00 */
         pci_set_byte(&pci_dev->config[PCI_BIST], (uint8_t) 0x00);
     }
 
-    /* Logic for Resets and other functionality stuff will come here */
     return;
 }
 
@@ -511,7 +515,7 @@ static uint32_t nvme_pci_read_config(PCIDevice *pci_dev, uint32_t addr, int len)
     if (range_covers_reg(addr, len, PCI_BASE_ADDRESS_2, PCI_BASE_ADDRESS_2_LEN)
         && (!(pci_dev->config[PCI_COMMAND] & PCI_COMMAND_IO))) {
         /* When CMD.IOSE is not set */
-        val &= ~((uint32_t) PCI_COMMAND_IO);
+        val = 0 ;
     }
     return val;
 }
