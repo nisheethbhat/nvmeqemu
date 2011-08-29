@@ -86,7 +86,7 @@ Moreover anything written outside <REG> and </REG> block is also ignored by
 the parser
 
 <REG>
-	CFG_NAME = PCIHEADER
+	CFG_NAME =PCIHEADER
 	NAME = "ID"
 	OFFSET = 0x00
 	LENGTH = 0x04
@@ -107,7 +107,7 @@ the respective driver
 	NAME = "CMD"
 	OFFSET = 0x04
 	LENGTH = 0x02
-	VALUE = 0x03
+	VALUE = 0x02
 	RO_MASK = 0xFBF8
 	RW_MASK = 0x0447
 	RWC_MASK = 0x0
@@ -577,7 +577,7 @@ capability.Thus values inside MSIXCAP are ignored!
 	NAME = "PXDCAP"
 	OFFSET = 0x04
 	LENGTH = 0x04
-	VALUE = 0x8000
+	VALUE = 0x10008000
 	RO_MASK = 0xFFFFFFFF
 	RW_MASK = 0x0
 	RWC_MASK = 0x0

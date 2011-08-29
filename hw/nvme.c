@@ -702,18 +702,14 @@ static void read_file(NVMEState *n, uint8_t space)
 {
     /* Pointer for Config file and temp file */
     FILE *config_file;
-    /* Array to store the PATH to config files
-     * NVME_DEVICE_PCI_CONFIG_FILE and
-     * NVME_DEVICE_NVME_CONFIG_FILE
-     */
-    char file_path[MAX_CHAR_PER_LINE];
 
-    /* Get the Config File Path in the system */
-    read_file_path(file_path, space);
-
-    config_file = fopen((char *)file_path, "r");
+    if (space == PCI_SPACE) {
+        config_file = fopen((char *)PCI_CONFIG_FILE, "r");
+    } else {
+        config_file = fopen((char *)NVME_CONFIG_FILE, "r");
+    }
     if (config_file == NULL) {
-        LOG_ERR("Could not open the config file");
+        LOG_NORM("Could not open the config file");
         if (space == NVME_SPACE) {
             LOG_NORM("Defaulting the NVME space..");
             nvme_set_registry(n);

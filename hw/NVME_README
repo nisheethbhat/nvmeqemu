@@ -81,6 +81,6 @@ http://dcgshare.lm.intel.com/gitweb/?p=nvme/manage.git;a=summary
     1. Config Files
            NVME module of Qemu uses two device config files called "NVME_device_PCI_config" and "NVME_device_NVME_config" located inside the /qemu/hw directory.
            They basically enable the user to set up the intial values in both the PCI and NVME config space.
-           These file names are unique and thus there should not be multiple files with the above names inside the directory and sub-directories from where the qemu is run by executing
+           These file names are unique and thus there should not be multiple files with the above names inside the directory from where the qemu is run by executing
            ./runqmu.sh <your_virtual_HD_filename>
-           Program should be executed from an higher level directory so that both the config files are available in either the directory itself or its subdirectories.
+           Program should be executed from an higher level directory so that both the config files are available inside the directory itself.

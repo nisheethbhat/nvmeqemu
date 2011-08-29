@@ -10,6 +10,10 @@
 #include <pthread.h>
 #include <sched.h>
 
+/* Config FIlE names */
+#define NVME_CONFIG_FILE "NVME_device_NVME_config"
+#define PCI_CONFIG_FILE "NVME_device_PCI_config"
+
 /* Should be in pci class someday. */
 #define PCI_CLASS_STORAGE_EXPRESS 0x010802
 /* Device ID for NVME Device */
@@ -887,7 +891,7 @@ typedef struct FILERead {
     uint32_t rw_mask;
     uint32_t rwc_mask;
     uint32_t rws_mask;
-    char cfg_name[50];
+    char *cfg_name;
 } FILERead;
 
 enum {PCI_SPACE = 0, NVME_SPACE = 1};
@@ -911,7 +915,6 @@ void process_sq(NVMEState *n, uint16_t sq_id);
 
 /* Config file read functions */
 int read_config_file(FILE *, NVMEState *, uint8_t);
-int read_file_path(char *arr, uint8_t flag);
 
 /* Functions for NVME Controller space reads and writes
  * (except doorbell)
