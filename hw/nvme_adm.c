@@ -270,10 +270,9 @@ static uint32_t adm_cmd_alloc_sq(NVMEState *n, NVMECmd *cmd, NVMECQE *cqe)
         return FAIL;
     }
 
-    if (c->pc == 0) {
-        LOG_NORM("Non physicaly contiguous memory !\n"
-            "Not supported yet\n");
-        /* Check chapter 5.4 in spec */
+    if ((c->pc == 0) && (*(mqes + 0x01) & 0x01)) {
+        LOG_NORM("CAP.CQR set to 1.Thus\
+            controller supports only contiguous IO queues");
         sf->sc = NVME_SC_INVALID_FIELD;
         return FAIL;
     }
@@ -382,23 +381,6 @@ static uint32_t adm_cmd_alloc_cq(NVMEState *n, NVMECmd *cmd, NVMECQE *cqe)
         return FAIL;
     }
 
-    /* Check chapter 5.3 NVM Express 1_0 spec
-    if c->pc is set to ‘1’, then c->prp1 specifies a 64-bit base memory
-    address pointer of the Completion Queue that is physically contiguous
-    and is memory page aligned.
-
-    if c->pc  is cleared to ‘0’, then this field specifies a PRP List
-    pointer that describes the list of pages that constitute the
-    Completion Queue and is memory page aligned
-    */
-
-    if (c->pc == 0) {
-        /*TODO: add support for list of pages */
-        LOG_NORM("c->pc == 0 Not supported yet\n");
-        sf->sc = NVME_SC_INVALID_FIELD;
-        return FAIL;
-    }
-
     if (c->qid == 0 || c->qid >= NVME_MAX_QID) {
         LOG_NORM("c->qid == 0 || c->qid >= NVME_MAX_QID\n");
         sf->sct = NVME_SCT_CMD_SPEC_ERR;
@@ -425,6 +407,12 @@ static uint32_t adm_cmd_alloc_cq(NVMEState *n, NVMECmd *cmd, NVMECQE *cqe)
         return FAIL;
     }
 
+    if ((c->pc == 0) && (*(mqes + 0x01) & 0x01)) {
+        LOG_NORM("CAP.CQR set to 1.Thus\
+            controller supports only contiguous IO queues");
+        sf->sc = NVME_SC_INVALID_FIELD;
+        return FAIL;
+    }
     /* In PRP1 is DMA address. */
     if (c->prp1 == 0) {
         LOG_NORM("c->prp1 == 0\n");
@@ -432,6 +420,12 @@ static uint32_t adm_cmd_alloc_cq(NVMEState *n, NVMECmd *cmd, NVMECQE *cqe)
         return FAIL;
     }
 
+    if (c->iv > n->dev.msix_entries_nr - 1 && IS_MSIX(n)) {
+        /* TODO : checks for MSI too */
+        sf->sct = NVME_SCT_CMD_SPEC_ERR;
+        sf->sc = NVME_INVALID_INTERRUPT_VECTOR;
+        return FAIL;
+    }
     id = adm_get_free_cq(n);
     if (id == NVME_MAX_QID) {
         LOG_NORM("i == NVME_MAX_QID\n");

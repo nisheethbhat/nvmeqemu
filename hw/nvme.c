@@ -184,8 +184,7 @@ static void nvme_mmio_writel(void *opaque, target_phys_addr_t addr,
         case NVME_INTMS:
             /* Operation not defined if MSI-X is enabled */
             if (nvme_dev->dev.msix_cap != 0x00 &&
-                (nvme_pci_read_config(&nvme_dev->dev,
-                    (nvme_dev->dev.msix_cap+3), BYTE) & (uint8_t)MASK(1, 7))) {
+                IS_MSIX(nvme_dev)) {
                 LOG_NORM("MSI-X is enabled..write to INTMS is undefined");
             } else {
                 /* MSICAP or PIN based ISR is enabled*/
@@ -196,8 +195,7 @@ static void nvme_mmio_writel(void *opaque, target_phys_addr_t addr,
         case NVME_INTMC:
             /* Operation not defined if MSI-X is enabled */
             if (nvme_dev->dev.msix_cap != 0x00 &&
-                (nvme_pci_read_config(&nvme_dev->dev,
-                    (nvme_dev->dev.msix_cap+3), BYTE) & (uint8_t)MASK(1, 7))) {
+                IS_MSIX(nvme_dev)) {
                 LOG_NORM("MSI-X is enabled..write to INTMC is undefined");
             } else {
                 /* MSICAP or PIN based ISR is enabled*/
@@ -209,6 +207,7 @@ static void nvme_mmio_writel(void *opaque, target_phys_addr_t addr,
             /* TODO : Features for IOCQES/IOSQES,SHN,AMS,CSS,MPS */
 
             /* Reading in old value before write */
+            /* TODO check for side effects due to le_tocpu */
             var = nvme_cntrl_read_config(nvme_dev, NVME_CC, DWORD);
 
             /* For 0->1 transition of CC.EN */
@@ -291,8 +290,7 @@ void nvme_cntrl_write_config(NVMEState *nvme_dev,
         range_covers_reg(addr, len, NVME_INTMC, DWORD)) {
         /* Check if MSIX is enabled */
         if (nvme_dev->dev.msix_cap != 0x00 &&
-            (nvme_pci_read_config(&nvme_dev->dev,
-                (nvme_dev->dev.msix_cap+3), BYTE) & (uint8_t)MASK(1, 7))) {
+            IS_MSIX(nvme_dev)) {
             LOG_NORM("MSI-X is enabled..write to INTMS/INTMC is undefined");
         } else {
             /* Specific case for Interrupt masks */
@@ -350,8 +348,7 @@ uint32_t nvme_cntrl_read_config(NVMEState *nvme_dev,
         range_covers_reg(addr, len, NVME_INTMC, DWORD)) {
         /* Check if MSIX is enabled */
         if (nvme_dev->dev.msix_cap != 0x00 &&
-            (nvme_pci_read_config(&nvme_dev->dev,
-                (nvme_dev->dev.msix_cap+3), BYTE) & (uint8_t)MASK(1, 7))) {
+            IS_MSIX(nvme_dev)) {
             LOG_NORM("MSI-X is enabled..read to INTMS/INTMC is undefined");
             val = 0;
         } else {

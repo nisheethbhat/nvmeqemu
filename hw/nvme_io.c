@@ -58,12 +58,14 @@ static uint8_t abort_command(NVMEState *n, uint16_t sq_id, NVMECmd *sqe)
 
 void process_sq(NVMEState *n, uint16_t sq_id)
 {
-    target_phys_addr_t addr;
+    target_phys_addr_t addr, pg_addr;
     uint16_t cq_id;
     NVMECmd sqe;
     NVMECQE cqe;
     uint32_t ret = NVME_SC_DATA_XFER_ERROR;
     NVMEStatusField *sf = (NVMEStatusField *) &cqe.status;
+    uint16_t mps;
+    uint32_t pg_no, entr_per_pg;
 
     cq_id = n->sq[sq_id].cq_id;
 
@@ -71,8 +73,23 @@ void process_sq(NVMEState *n, uint16_t sq_id)
         return;
     }
     memset(&cqe, 0, sizeof(cqe));
-    addr = n->sq[sq_id].dma_addr + n->sq[sq_id].head * sizeof(sqe);
 
+    /* Process SQE */
+    if (sq_id == ASQ_ID || n->sq[sq_id].phys_contig) {
+        addr = n->sq[sq_id].dma_addr + n->sq[sq_id].head * sizeof(sqe);
+    } else {
+        /* PRP implementation */
+        memcpy(&mps, &n->cntrl_reg[NVME_CC], WORD);
+        LOG_DBG("Mask: %x", MASK(4, 7));
+        mps &= (uint16_t) MASK(4, 7);
+        mps >>= 7;
+        LOG_DBG("CC.MPS:%x", mps);
+        entr_per_pg = (uint32_t) ((1 << (12 + mps))/sizeof(sqe));
+        pg_no = (uint32_t) (n->sq[sq_id].head / entr_per_pg);
+        nvme_dma_mem_read(n->sq[sq_id].dma_addr + (pg_no * QWORD),
+            (uint8_t *)&pg_addr, QWORD);
+        addr = pg_addr + (n->sq[sq_id].head % entr_per_pg) * sizeof(sqe);
+    }
     nvme_dma_mem_read(addr, (uint8_t *)&sqe, sizeof(sqe));
 
     if (n->abort) {
@@ -94,9 +111,23 @@ void process_sq(NVMEState *n, uint16_t sq_id)
     sf->p = n->cq[cq_id].phase_tag;
     sf->m = 0;
     sf->dnr = 0; /* TODO add support for dnr */
-        /* write cqe to completion queue */
 
-    addr = n->cq[cq_id].dma_addr + n->cq[cq_id].tail * sizeof(cqe);
+    /* write cqe to completion queue */
+    if (cq_id == ACQ_ID || n->cq[cq_id].phys_contig) {
+        addr = n->cq[cq_id].dma_addr + n->cq[cq_id].tail * sizeof(cqe);
+    } else {
+        /* PRP implementation */
+        memcpy(&mps, &n->cntrl_reg[NVME_CC], WORD);
+        LOG_DBG("Mask: %x", MASK(4, 7));
+        mps &= (uint16_t) MASK(4, 7);
+        mps >>= 7;
+        LOG_DBG("CC.MPS:%x", mps);
+        entr_per_pg = (uint32_t) ((1 << (12 + mps))/sizeof(cqe));
+        pg_no = (uint32_t) (n->cq[cq_id].tail / entr_per_pg);
+        nvme_dma_mem_read(n->cq[cq_id].dma_addr + (pg_no * QWORD),
+            (uint8_t *)&pg_addr, QWORD);
+        addr = pg_addr + (n->cq[cq_id].tail % entr_per_pg) * sizeof(cqe);
+    }
     nvme_dma_mem_write(addr, (uint8_t *)&cqe, sizeof(cqe));
 
     incr_sq_head(&n->sq[sq_id]);

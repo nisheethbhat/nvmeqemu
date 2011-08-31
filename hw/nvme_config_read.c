@@ -125,22 +125,7 @@ int read_config_file(FILE *config_file , NVMEState *n, uint8_t flag)
                 } else if (data.offset == 1) {
                     link = (uint8_t) data.val ;
                 }
-            } else if (!strcmp(data.cfg_name, "AERCAP")) {
-                if (data.offset == 0) {
-                    /* One time per initialization CFG_NAME */
-                    offset = 0x100;
-                    /* exp_cap is 8 bits only in Qemu PCI code.
-                     * It should be 12 bits
-                     */
-                    n->dev.exp.exp_cap = offset;
-                }
-                if (data.offset == 0 && data.len > 3) {
-                    link = (uint16_t) (data.val >> 20);
-                } else if (data.offset == 2) {
-                    link = (uint8_t) (data.val >> 4);
-                }
             }
-
 
             if (((data.offset + offset + data.len) > 0x1000) && (flag ==
                 PCI_SPACE)) {

@@ -32,6 +32,10 @@
 #define BYTE 1
 #define WORD 2
 #define DWORD 4
+#define QWORD 8
+
+/* Macros to check which Interrupt is enabled */
+#define IS_MSIX(n) (n->dev.config[n->dev.msix_cap + 0x03] & 0x80)
 
 /* NVME Cntrl Space specific #defines */
 #define CC_EN 1
@@ -192,7 +196,6 @@ typedef struct NVMEIOCQueue {
     uint16_t size;
     uint64_t dma_addr; /* DMA Address */
     uint8_t phase_tag; /* check spec for Phase Tag details*/
-    /*FIXME: Add support for PRP List. */
 } NVMEIOCQueue;
 
 /* FIXME*/
