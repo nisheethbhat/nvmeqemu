@@ -18,9 +18,6 @@ http://wiki.qemu.org/Main_Page
 To clone Qemu with support for NVME clone source code from:
 http://dcgshare.lm.intel.com/gitweb/?p=nvme/qemu.git;a=summary
 
-To clone files with various shell scripts for running the Qemu:
-http://dcgshare.lm.intel.com/gitweb/?p=nvme/manage.git;a=summary
-
 2. How to compile Qemu with NVME support.
     1. Clone git repository.
     2. Assume You are using 64 bit environment and 64 bit Linux kernel
