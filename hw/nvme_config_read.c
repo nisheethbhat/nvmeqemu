@@ -117,8 +117,6 @@ int read_config_file(FILE *config_file , NVMEState *n, uint8_t flag)
                 if (data.offset == 0) {
                     /* One time initialization per CFG_NAME */
                     offset = link;
-                    n->dev.cap_present = n->dev.cap_present |
-                        QEMU_PCI_CAP_EXPRESS;
                 }
                 if (data.offset == 0 && data.len > 1) {
                     link = (uint8_t) (data.val >> 8);
@@ -127,8 +125,8 @@ int read_config_file(FILE *config_file , NVMEState *n, uint8_t flag)
                 }
             }
 
-            if (((data.offset + offset + data.len) > 0x1000) && (flag ==
-                PCI_SPACE)) {
+            if (((data.offset + offset + data.len) > pci_config_size(&n->dev))
+                && (flag == PCI_SPACE)) {
                 LOG_ERR("Invlaid Offsets present in the Config file for \
                     PCI address space \n");
             } else if (((data.offset + offset + data.len) > 0xFFF) && (flag ==

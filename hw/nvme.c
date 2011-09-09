@@ -280,12 +280,15 @@ static void nvme_mmio_writel(void *opaque, target_phys_addr_t addr,
                       target_phys_addr_t : address (offset address)
                       uint32_t : Value to write
                       uint8_t : Length to be read
+    Note: Writes are done to the NVME device in Least Endian Fashion
 *********************************************************************/
 void nvme_cntrl_write_config(NVMEState *nvme_dev,
     target_phys_addr_t addr, uint32_t val, uint8_t len)
 {
     uint8_t index;
     uint8_t * intr_vect = (uint8_t *) &nvme_dev->intr_vect;
+
+    val = cpu_to_le32(val);
     if (range_covers_reg(addr, len, NVME_INTMS, DWORD) ||
         range_covers_reg(addr, len, NVME_INTMC, DWORD)) {
         /* Check if MSIX is enabled */
@@ -369,7 +372,7 @@ uint32_t nvme_cntrl_read_config(NVMEState *nvme_dev,
 *********************************************************************/
 static uint32_t nvme_mmio_readb(void *opaque, target_phys_addr_t addr)
 {
-    uint8_t rd_val;
+    uint32_t rd_val;
     NVMEState *nvme_dev = (NVMEState *) opaque;
     LOG_DBG("%s(): addr = 0x%08x\n", __func__, (unsigned)addr);
     /* Check if NVME controller Capabilities was written */
@@ -414,7 +417,6 @@ static uint32_t nvme_mmio_readw(void *opaque, target_phys_addr_t addr)
     }
     return rd_val;
 }
-
 /*********************************************************************
     Function     :    nvme_mmio_readl
     Description  :    Read 4 Bytes at addr/register
@@ -485,6 +487,7 @@ static inline uint8_t range_covers_reg(uint64_t addr, uint64_t len,
 static void nvme_pci_write_config(PCIDevice *pci_dev,
                                     uint32_t addr, uint32_t val, int len)
 {
+    val = cpu_to_le32(val);
     /* Writing the PCI Config Space */
     pci_default_write_config(pci_dev, addr, val, len);
     if (range_covers_reg(addr, len, PCI_BIST, PCI_BIST_LEN)
@@ -607,7 +610,6 @@ static void clear_nvme_device(NVMEState *n)
     n->aqstate.acqa = nvme_cntrl_read_config(n, NVME_ACQ + 4, DWORD);
     n->aqstate.acqa = (n->aqstate.acqa << 32) |
         nvme_cntrl_read_config(n, NVME_ACQ, DWORD);
-
     /* Update NVME space registery from config file */
     read_file(n, NVME_SPACE);
 
@@ -862,7 +864,6 @@ static PCIDeviceInfo nvme_info = {
     .qdev.size = sizeof(NVMEState),
     .qdev.vmsd = &vmstate_nvme,
     .qdev.reset = qdev_nvme_reset,
-    .is_express = 1,
     .config_write = nvme_pci_write_config,
     .config_read = nvme_pci_read_config,
     .init = pci_nvme_init,

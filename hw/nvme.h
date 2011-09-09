@@ -70,8 +70,6 @@
 #define NVME_ABORT_COMMAND_LIMIT 10
 #define NVME_EMPTY 0xffffffff
 
-
-
 /* NVMe Controller Registers */
 enum {
     NVME_CAP       = 0x0000, /* Controller Capabilities, 64bit */
