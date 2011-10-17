@@ -746,10 +746,10 @@ static void read_file(NVMEState *n, uint8_t space)
 static int pci_nvme_init(PCIDevice *pci_dev)
 {
     NVMEState *n = DO_UPCAST(NVMEState, dev, pci_dev);
-    uint8_t *pci_conf = NULL;
+    /* TODO: uint8_t *pci_conf = NULL; */
     uint32_t ret;
 
-    pci_conf = n->dev.config;
+    /* TODO: pci_conf = n->dev.config; */
     n->nvectors = NVME_MSIX_NVECTORS;
     n->bar0_size = NVME_REG_SIZE;
 
