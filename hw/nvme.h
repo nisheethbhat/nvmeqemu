@@ -788,43 +788,43 @@ enum {
 
 /* Identify - Controller.
  * Number in comments are in bytes.
- * Check spec NVM Express 1.0 Chapter 5.11 Identify command
+ * Check spec NVM Express 1.0b Chapter 5.11 Identify command
  */
 
 typedef struct NVMEIdentifyController {
-    uint16_t vid;        /* [0-1] PCI Vendor ID*/
-    uint16_t ssvid;        /* [2-3] PCI Subsystem Vendor ID */
-    uint8_t sn[20];        /* [4-23] Serial Number */
-    uint8_t mn[40];        /* [24-63] Model Number */
-    uint8_t fr[8];        /* [64-71] Firmware Number */
-    uint8_t rab;        /* [72] Recommended Arbitration Burst */
-    uint8_t res0[183];     /* [73-255] Reserved */
-
-    uint16_t oacs;        /* [256-257] Optional Admin Command Support */
-    uint8_t acl;        /* [258] Abort Command Limit */
-    uint8_t aerl;        /* [259] Asynchronous Event Request Limit */
-    uint8_t frmw;        /* [260] Firmware Updates */
-    uint8_t lpa;        /* [261] Log Page Attributes */
-    uint8_t elpe;        /* [262] Error Log Page Entries */
-    uint8_t npss;        /* [263] Number of Power States Support */
-    uint8_t res1[248];     /* [264-511] Reserved */
-
-    uint8_t sqes;        /* [512] Submission Queue Entry Size */
-    uint8_t cqes;        /* [513] Completion Queue Entry Size */
-    uint8_t res2[2];    /* [514-515] Reserved */
-    uint32_t nn;        /* [516-519] Number of Namespaces */
-    uint16_t oncs;        /* [520-521] Optional NVM Command Support */
-    uint16_t fuses;        /* [522-523] Fused Operation Support */
-    uint8_t fna;        /* [524] Format NVM Attributes */
-    uint8_t vwc;        /* [525] Volatile Write Cache*/
-    uint16_t awun;        /* [526-527] Atomic Write Unit Normal */
-    uint16_t awupf;        /* [528-529] Atomic Write Unit Power Fail */
-    uint8_t res3[174];    /* [530-703] Reserved */
-
-    uint8_t res4[1344];    /* [704-2047] */
-    uint8_t psd0[32];    /* [2048-2079] Power State 0 Descriptor */
-    uint8_t psdx[992];    /* [2080-3071] Power State 1-31 Descriptor*/
-    uint8_t vs[1024];    /* [3072-4095] Vendor Specific */
+    uint16_t vid;
+    uint16_t ssvid;
+    uint8_t sn[20];
+    uint8_t mn[40];
+    uint8_t fr[8];
+    uint8_t rab;
+    uint8_t ieee[3];
+    uint8_t mic;
+    uint8_t mdts;
+    uint8_t rsvd255[178];
+    uint16_t oacs;
+    uint8_t acl;
+    uint8_t aerl;
+    uint8_t frmw;
+    uint8_t lpa;
+    uint8_t elpe;
+    uint8_t npss;
+    uint8_t rsvd511[248];
+    uint8_t sqes;
+    uint8_t cqes;
+    uint16_t rsvd515;
+    uint32_t nn;
+    uint16_t oncs;
+    uint16_t fuses;
+    uint8_t fna;
+    uint8_t vwc;
+    uint16_t awun;
+    uint16_t awupf;
+    uint8_t rsvd703[174];
+    uint8_t rsvd2047[1344];
+    uint8_t psd0[32];
+    uint8_t psdx[992];
+    uint8_t vs[1024];
 } NVMEIdentifyController;
 
 struct power_state_description {

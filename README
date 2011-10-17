@@ -29,12 +29,11 @@ git clone git@github.com:nvmeqemu/nvmeqemu.git
            sudo apt-get install libsdl-dev
            sudo apt-get install libaio-dev
 
-       For RHEL5 host (If the packages are not found, check your repositories' setup): 
+       For RHEL5 host (If the packages are not found, check your repositories' setup):
            yum install kernel-devel
            yum install zlib-devel
            yum install SDL
            yum install libaio-devel
-       
        ./configure --enable-io-thread --enable-linux-aio --target-list=x86_64-softmmu --enable-sdl
        NOTE: With RHEL5 the configure might fail, complaining about AIO even after installing it. Ignore it and re-run configure with the AIO switch removed from the command
 
