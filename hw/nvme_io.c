@@ -62,7 +62,7 @@ void process_sq(NVMEState *n, uint16_t sq_id)
     uint16_t cq_id;
     NVMECmd sqe;
     NVMECQE cqe;
-    uint32_t ret = NVME_SC_DATA_XFER_ERROR;
+    /* TODO: uint32_t ret = NVME_SC_DATA_XFER_ERROR; */
     NVMEStatusField *sf = (NVMEStatusField *) &cqe.status;
     uint16_t mps;
     uint32_t pg_no, entr_per_pg;
@@ -100,9 +100,9 @@ void process_sq(NVMEState *n, uint16_t sq_id)
     }
 
     if (sq_id == ASQ_ID) {
-        ret = nvme_admin_command(n, &sqe, &cqe);
+        nvme_admin_command(n, &sqe, &cqe);
     } else {
-        ret = nvme_io_command(n, &sqe, &cqe);
+        nvme_io_command(n, &sqe, &cqe);
     }
     cqe.sq_id = sq_id;
     cqe.sq_head = n->sq[sq_id].head;

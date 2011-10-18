@@ -560,8 +560,8 @@ static uint32_t adm_cmd_id_ns(NVMEState *n, NVMECmd *cmd)
 static uint32_t adm_cmd_identify(NVMEState *n, NVMECmd *cmd, NVMECQE *cqe)
 {
     NVMEAdmCmdIdentify *c = (NVMEAdmCmdIdentify *)cmd;
-    uint16_t controller;
-    target_phys_addr_t addr;
+    /* TODO: uint16_t controller; */
+    /* TODO: target_phys_addr_t addr; */
     uint8_t ret;
     NVMEStatusField *sf = (NVMEStatusField *)&cqe->status;
     sf->sc = NVME_SC_SUCCESS;
@@ -585,8 +585,8 @@ static uint32_t adm_cmd_identify(NVMEState *n, NVMECmd *cmd, NVMECQE *cqe)
         return FAIL;
     }
 
-    controller = c->cns;
-    addr = c->prp1;
+    /* TODO: controller = c->cns; */
+    /* TODO: addr = c->prp1; */
 
     /* Construct some data and copy it to the addr.*/
     if (c->cns == NVME_IDENTIFY_CONTROLLER) {
